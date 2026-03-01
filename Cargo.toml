@@ -1,0 +1,49 @@
+[workspace]
+members = [
+    "crates/ripsed-core",
+    "crates/ripsed-fs",
+    "crates/ripsed-json",
+    "crates/ripsed-cli",
+    "xtask",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+authors = ["ripsed contributors"]
+repository = "https://github.com/ripsed/ripsed"
+rust-version = "1.85"
+
+[workspace.dependencies]
+# Internal crates
+ripsed-core = { path = "crates/ripsed-core" }
+ripsed-fs = { path = "crates/ripsed-fs" }
+ripsed-json = { path = "crates/ripsed-json" }
+
+# Core dependencies
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+toml = "0.8"
+strsim = "0.11"
+
+# File system
+globset = "0.4"
+ignore = "0.4"
+rayon = "1"
+memmap2 = "0.9"
+tempfile = "3"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+anstream = "0.6"
+anstyle = "1"
+
+# Dev / Test
+proptest = "1"
+assert_cmd = "2"
+predicates = "3"
+criterion = { version = "0.5", features = ["html_reports"] }
