@@ -295,6 +295,7 @@ fn validate_op(index: usize, op: &Op) -> Result<(), RipsedError> {
                 validate_regex(index, find)?;
             }
         }
+        _ => {}
     }
 
     Ok(())

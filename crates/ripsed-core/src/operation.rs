@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 /// Text transformation modes for the Transform operation.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum TransformMode {
     Upper,
     Lower,
@@ -43,6 +44,7 @@ impl std::str::FromStr for TransformMode {
 /// Both CLI args and JSON requests are normalized into this form.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "op", rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum Op {
     Replace {
         find: String,
