@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 /// Advisory file lock for preventing concurrent access to the same file.
 #[derive(Debug)]
 pub struct FileLock {
-    _file: File,
+    file: Option<File>,
     lock_path: PathBuf,
 }
 
@@ -32,7 +32,7 @@ impl FileLock {
             })?;
 
         Ok(Self {
-            _file: file,
+            file: Some(file),
             lock_path,
         })
     }
@@ -68,13 +68,18 @@ impl FileLock {
     }
 
     /// Release the lock by removing the lock file.
-    pub fn release(self) -> io::Result<()> {
+    ///
+    /// Closes the file handle before deleting — required on Windows
+    /// where open files cannot be deleted.
+    pub fn release(mut self) -> io::Result<()> {
+        self.file.take(); // close the handle first
         std::fs::remove_file(&self.lock_path)
     }
 }
 
 impl Drop for FileLock {
     fn drop(&mut self) {
+        self.file.take(); // close the handle before deleting (Windows compat)
         let _ = std::fs::remove_file(&self.lock_path);
     }
 }
