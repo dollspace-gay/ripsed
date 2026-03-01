@@ -13,14 +13,14 @@ version = "0.2.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 authors = ["ripsed contributors"]
-repository = "https://github.com/ripsed/ripsed"
+repository = "https://github.com/dollspace-gay/ripsed"
 rust-version = "1.85"
 
 [workspace.dependencies]
 # Internal crates
-ripsed-core = { path = "crates/ripsed-core" }
-ripsed-fs = { path = "crates/ripsed-fs" }
-ripsed-json = { path = "crates/ripsed-json" }
+ripsed-core = { path = "crates/ripsed-core", version = "0.2.0" }
+ripsed-fs = { path = "crates/ripsed-fs", version = "0.2.0" }
+ripsed-json = { path = "crates/ripsed-json", version = "0.2.0" }
 
 # Core dependencies
 regex = "1"
