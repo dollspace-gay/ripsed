@@ -106,3 +106,5 @@ jobs:
 
       - name: Run Miri (ripsed-core only)
         run: cargo +nightly miri test -p ripsed-core
+        env:
+          MIRIFLAGS: "-Zmiri-disable-isolation"
