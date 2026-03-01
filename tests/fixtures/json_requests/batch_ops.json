@@ -1,0 +1,22 @@
+{
+  "version": "1",
+  "operations": [
+    {
+      "op": "replace",
+      "find": "old_function",
+      "replace": "new_function"
+    },
+    {
+      "op": "delete",
+      "find": "deprecated_call"
+    },
+    {
+      "op": "insert_after",
+      "find": "use crate",
+      "content": "use std::collections::HashMap;"
+    }
+  ],
+  "options": {
+    "dry_run": true
+  }
+}

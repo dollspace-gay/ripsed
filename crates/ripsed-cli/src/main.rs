@@ -32,6 +32,14 @@ fn main() {
                 process::exit(1);
             });
 
+            // If stdin was empty and --json wasn't explicitly requested,
+            // fall through to file mode (subprocess/test environments often
+            // have stdin as a closed pipe rather than a tty).
+            if input.is_empty() && !cli.json {
+                run_file_mode(&cli);
+                return;
+            }
+
             if cli.json {
                 run_json_mode(&input);
             } else {
@@ -55,7 +63,7 @@ fn main() {
             process::exit(1);
         }
     } else if !stdin_is_tty {
-        // Pipe mode: stdin -> stdout
+        // Pipe mode: stdin -> stdout (--no-json was set)
         let mut data = Vec::new();
         std::io::stdin().read_to_end(&mut data).unwrap_or_else(|e| {
             eprintln!("ripsed: failed to read stdin: {e}");
@@ -244,11 +252,9 @@ fn run_file_mode(cli: &Cli) {
 
         total_changes += output.changes.len();
 
-        if cli.dry_run {
-            human::print_file_diff(file_path, &output.changes);
-        } else if cli.count {
+        if cli.count {
             // Just count, don't print diffs
-        } else {
+        } else if !cli.quiet {
             human::print_file_diff(file_path, &output.changes);
         }
 

@@ -1,0 +1,13 @@
+{
+  "version": "1",
+  "operations": [
+    {
+      "op": "replace",
+      "find": "old_function",
+      "replace": "new_function"
+    }
+  ],
+  "options": {
+    "dry_run": true
+  }
+}

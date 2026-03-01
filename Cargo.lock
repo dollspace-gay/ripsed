@@ -621,6 +621,7 @@ dependencies = [
  "ripsed-fs",
  "ripsed-json",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -652,6 +653,7 @@ dependencies = [
 name = "ripsed-json"
 version = "0.1.0"
 dependencies = [
+ "regex",
  "ripsed-core",
  "serde",
  "serde_json",

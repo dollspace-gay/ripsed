@@ -7,11 +7,16 @@ use serde::{Deserialize, Serialize};
 pub struct JsonRequest {
     #[serde(default = "default_version")]
     pub version: String,
+    #[serde(default)]
     pub operations: Vec<JsonOp>,
     #[serde(default)]
     pub options: OpOptions,
     /// Undo request (mutually exclusive with operations).
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub undo: Option<UndoRequest>,
+    /// Forward-compatible: capture unknown top-level fields.
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
 }
 
 /// A single operation in a JSON request, with per-operation glob.
@@ -51,7 +56,10 @@ impl JsonRequest {
     fn validate(&self) -> Result<(), RipsedError> {
         if self.version != "1" {
             return Err(RipsedError::invalid_request(
-                format!("Unknown version '{}'. Supported versions: 1", self.version),
+                format!(
+                    "Unknown version '{}'. Supported versions: 1",
+                    self.version
+                ),
                 "Set \"version\": \"1\" in your request.",
             ));
         }
@@ -70,16 +78,69 @@ impl JsonRequest {
             ));
         }
 
+        // Validate undo request
+        if let Some(undo) = &self.undo {
+            if undo.last == 0 {
+                return Err(RipsedError::invalid_request(
+                    "Undo 'last' must be at least 1.",
+                    "Set \"last\" to the number of operations to undo (minimum 1).",
+                ));
+            }
+        }
+
+        // Validate each operation
+        for (i, json_op) in self.operations.iter().enumerate() {
+            validate_op(i, &json_op.op)?;
+
+            // Validate per-operation glob if present
+            if let Some(glob) = &json_op.glob {
+                validate_glob_pattern(glob).map_err(|msg| {
+                    RipsedError::invalid_request(
+                        format!("Invalid glob in operation {i}: {msg}"),
+                        format!(
+                            "Fix the glob pattern '{}' in operation {i}. {}",
+                            glob, msg
+                        ),
+                    )
+                })?;
+            }
+        }
+
+        // Validate global glob in options
+        if let Some(glob) = &self.options.glob {
+            validate_glob_pattern(glob).map_err(|msg| {
+                RipsedError::invalid_request(
+                    format!("Invalid glob in options: {msg}"),
+                    format!("Fix the glob pattern '{}' in options. {}", glob, msg),
+                )
+            })?;
+        }
+
+        // Validate ignore glob in options
+        if let Some(ignore) = &self.options.ignore {
+            validate_glob_pattern(ignore).map_err(|msg| {
+                RipsedError::invalid_request(
+                    format!("Invalid ignore glob in options: {msg}"),
+                    format!(
+                        "Fix the ignore pattern '{}' in options. {}",
+                        ignore, msg
+                    ),
+                )
+            })?;
+        }
+
         Ok(())
     }
 
     /// Extract the list of operations with their effective globs.
+    /// Per-operation globs take precedence over the global options glob.
     pub fn into_ops(self) -> (Vec<(Op, Option<String>)>, OpOptions) {
+        let global_glob = self.options.glob.clone();
         let ops = self
             .operations
             .into_iter()
             .map(|json_op| {
-                let glob = json_op.glob.or_else(|| self.options.glob.clone());
+                let glob = json_op.glob.or_else(|| global_glob.clone());
                 (json_op.op, glob)
             })
             .collect();
@@ -87,9 +148,206 @@ impl JsonRequest {
     }
 }
 
+/// Validate a single operation's fields.
+fn validate_op(index: usize, op: &Op) -> Result<(), RipsedError> {
+    match op {
+        Op::Replace {
+            find,
+            replace,
+            regex,
+            ..
+        } => {
+            if find.is_empty() {
+                return Err(RipsedError::invalid_request(
+                    format!("Operation {index}: 'find' must not be empty for replace."),
+                    format!(
+                        "Set a non-empty 'find' pattern in operation {index}."
+                    ),
+                ));
+            }
+            // An empty replacement is valid (it deletes the matched text)
+            let _ = replace;
+            if *regex {
+                validate_regex(index, find)?;
+            }
+        }
+        Op::Delete { find, regex, .. } => {
+            if find.is_empty() {
+                return Err(RipsedError::invalid_request(
+                    format!("Operation {index}: 'find' must not be empty for delete."),
+                    format!(
+                        "Set a non-empty 'find' pattern in operation {index}."
+                    ),
+                ));
+            }
+            if *regex {
+                validate_regex(index, find)?;
+            }
+        }
+        Op::InsertAfter {
+            find,
+            content,
+            regex,
+            ..
+        } => {
+            if find.is_empty() {
+                return Err(RipsedError::invalid_request(
+                    format!(
+                        "Operation {index}: 'find' must not be empty for insert_after."
+                    ),
+                    format!(
+                        "Set a non-empty 'find' pattern in operation {index}."
+                    ),
+                ));
+            }
+            if content.is_empty() {
+                return Err(RipsedError::invalid_request(
+                    format!(
+                        "Operation {index}: 'content' must not be empty for insert_after."
+                    ),
+                    format!("Set a non-empty 'content' in operation {index}."),
+                ));
+            }
+            if *regex {
+                validate_regex(index, find)?;
+            }
+        }
+        Op::InsertBefore {
+            find,
+            content,
+            regex,
+            ..
+        } => {
+            if find.is_empty() {
+                return Err(RipsedError::invalid_request(
+                    format!(
+                        "Operation {index}: 'find' must not be empty for insert_before."
+                    ),
+                    format!(
+                        "Set a non-empty 'find' pattern in operation {index}."
+                    ),
+                ));
+            }
+            if content.is_empty() {
+                return Err(RipsedError::invalid_request(
+                    format!(
+                        "Operation {index}: 'content' must not be empty for insert_before."
+                    ),
+                    format!("Set a non-empty 'content' in operation {index}."),
+                ));
+            }
+            if *regex {
+                validate_regex(index, find)?;
+            }
+        }
+        Op::ReplaceLine {
+            find,
+            content,
+            regex,
+            ..
+        } => {
+            if find.is_empty() {
+                return Err(RipsedError::invalid_request(
+                    format!(
+                        "Operation {index}: 'find' must not be empty for replace_line."
+                    ),
+                    format!(
+                        "Set a non-empty 'find' pattern in operation {index}."
+                    ),
+                ));
+            }
+            if content.is_empty() {
+                return Err(RipsedError::invalid_request(
+                    format!(
+                        "Operation {index}: 'content' must not be empty for replace_line."
+                    ),
+                    format!("Set a non-empty 'content' in operation {index}."),
+                ));
+            }
+            if *regex {
+                validate_regex(index, find)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate that a string compiles as a valid regex.
+fn validate_regex(index: usize, pattern: &str) -> Result<(), RipsedError> {
+    regex::Regex::new(pattern).map_err(|e| {
+        RipsedError::invalid_regex(index, pattern, &e.to_string())
+    })?;
+    Ok(())
+}
+
+/// Validate a glob pattern for common malformations.
+fn validate_glob_pattern(pattern: &str) -> Result<(), String> {
+    if pattern.is_empty() {
+        return Err("Glob pattern must not be empty.".to_string());
+    }
+
+    // Check for unmatched brackets
+    let mut in_bracket = false;
+    let mut chars = pattern.chars().peekable();
+    while let Some(ch) = chars.next() {
+        match ch {
+            '\\' => {
+                // Skip escaped character
+                let _ = chars.next();
+            }
+            '[' if !in_bracket => {
+                in_bracket = true;
+            }
+            ']' if in_bracket => {
+                in_bracket = false;
+            }
+            '{' => {
+                // Check for unmatched braces
+                let mut brace_depth = 1;
+                let mut found_close = false;
+                for next_ch in chars.by_ref() {
+                    match next_ch {
+                        '{' => brace_depth += 1,
+                        '}' => {
+                            brace_depth -= 1;
+                            if brace_depth == 0 {
+                                found_close = true;
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                if !found_close {
+                    return Err(
+                        "Unmatched '{' in glob pattern. Add a closing '}'.".to_string()
+                    );
+                }
+            }
+            '}' => {
+                return Err(
+                    "Unmatched '}' in glob pattern. Remove the extra '}' or add an opening '{'.".to_string()
+                );
+            }
+            _ => {}
+        }
+    }
+
+    if in_bracket {
+        return Err(
+            "Unmatched '[' in glob pattern. Add a closing ']'.".to_string()
+        );
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── Basic parsing ──
 
     #[test]
     fn test_parse_simple_replace() {
@@ -119,5 +377,638 @@ mod tests {
         let input = r#"{"version": "99", "operations": [{"op": "replace", "find": "a", "replace": "b"}]}"#;
         let result = JsonRequest::parse(input);
         assert!(result.is_err());
+    }
+
+    // ── Every operation type ──
+
+    #[test]
+    fn test_parse_delete() {
+        let input = r#"{
+            "operations": [{"op": "delete", "find": "TODO", "regex": false}]
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        assert_eq!(req.operations.len(), 1);
+        match &req.operations[0].op {
+            Op::Delete { find, regex, .. } => {
+                assert_eq!(find, "TODO");
+                assert!(!regex);
+            }
+            _ => panic!("Expected Delete operation"),
+        }
+    }
+
+    #[test]
+    fn test_parse_delete_with_regex() {
+        let input = r#"{
+            "operations": [{"op": "delete", "find": "^\\s*//\\s*TODO:.*$", "regex": true}]
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        match &req.operations[0].op {
+            Op::Delete { find, regex, .. } => {
+                assert_eq!(find, r"^\s*//\s*TODO:.*$");
+                assert!(regex);
+            }
+            _ => panic!("Expected Delete operation"),
+        }
+    }
+
+    #[test]
+    fn test_parse_insert_after() {
+        let input = r#"{
+            "operations": [{
+                "op": "insert_after",
+                "find": "use serde::Deserialize;",
+                "content": "use serde::Serialize;",
+                "glob": "src/models/*.rs"
+            }]
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        assert_eq!(req.operations.len(), 1);
+        match &req.operations[0].op {
+            Op::InsertAfter { find, content, .. } => {
+                assert_eq!(find, "use serde::Deserialize;");
+                assert_eq!(content, "use serde::Serialize;");
+            }
+            _ => panic!("Expected InsertAfter operation"),
+        }
+        assert_eq!(
+            req.operations[0].glob.as_deref(),
+            Some("src/models/*.rs")
+        );
+    }
+
+    #[test]
+    fn test_parse_insert_before() {
+        let input = r#"{
+            "operations": [{
+                "op": "insert_before",
+                "find": "fn main()",
+                "content": "// Entry point"
+            }]
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        match &req.operations[0].op {
+            Op::InsertBefore { find, content, .. } => {
+                assert_eq!(find, "fn main()");
+                assert_eq!(content, "// Entry point");
+            }
+            _ => panic!("Expected InsertBefore operation"),
+        }
+    }
+
+    #[test]
+    fn test_parse_replace_line() {
+        let input = r#"{
+            "operations": [{
+                "op": "replace_line",
+                "find": "old_version = 1",
+                "content": "new_version = 2"
+            }]
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        match &req.operations[0].op {
+            Op::ReplaceLine { find, content, .. } => {
+                assert_eq!(find, "old_version = 1");
+                assert_eq!(content, "new_version = 2");
+            }
+            _ => panic!("Expected ReplaceLine operation"),
+        }
+    }
+
+    // ── Validation: empty find ──
+
+    #[test]
+    fn test_reject_empty_find_replace() {
+        let input =
+            r#"{"operations": [{"op": "replace", "find": "", "replace": "bar"}]}"#;
+        let err = JsonRequest::parse(input).unwrap_err();
+        assert!(err.message.contains("'find' must not be empty"));
+    }
+
+    #[test]
+    fn test_reject_empty_find_delete() {
+        let input = r#"{"operations": [{"op": "delete", "find": ""}]}"#;
+        let err = JsonRequest::parse(input).unwrap_err();
+        assert!(err.message.contains("'find' must not be empty"));
+    }
+
+    #[test]
+    fn test_reject_empty_find_insert_after() {
+        let input = r#"{"operations": [{"op": "insert_after", "find": "", "content": "x"}]}"#;
+        let err = JsonRequest::parse(input).unwrap_err();
+        assert!(err.message.contains("'find' must not be empty"));
+    }
+
+    #[test]
+    fn test_reject_empty_find_insert_before() {
+        let input = r#"{"operations": [{"op": "insert_before", "find": "", "content": "x"}]}"#;
+        let err = JsonRequest::parse(input).unwrap_err();
+        assert!(err.message.contains("'find' must not be empty"));
+    }
+
+    #[test]
+    fn test_reject_empty_find_replace_line() {
+        let input = r#"{"operations": [{"op": "replace_line", "find": "", "content": "x"}]}"#;
+        let err = JsonRequest::parse(input).unwrap_err();
+        assert!(err.message.contains("'find' must not be empty"));
+    }
+
+    // ── Validation: empty content ──
+
+    #[test]
+    fn test_reject_empty_content_insert_after() {
+        let input = r#"{"operations": [{"op": "insert_after", "find": "x", "content": ""}]}"#;
+        let err = JsonRequest::parse(input).unwrap_err();
+        assert!(err.message.contains("'content' must not be empty"));
+    }
+
+    #[test]
+    fn test_reject_empty_content_insert_before() {
+        let input = r#"{"operations": [{"op": "insert_before", "find": "x", "content": ""}]}"#;
+        let err = JsonRequest::parse(input).unwrap_err();
+        assert!(err.message.contains("'content' must not be empty"));
+    }
+
+    #[test]
+    fn test_reject_empty_content_replace_line() {
+        let input = r#"{"operations": [{"op": "replace_line", "find": "x", "content": ""}]}"#;
+        let err = JsonRequest::parse(input).unwrap_err();
+        assert!(err.message.contains("'content' must not be empty"));
+    }
+
+    // ── Replace with empty replacement is valid (acts as deletion) ──
+
+    #[test]
+    fn test_allow_empty_replacement_in_replace() {
+        let input =
+            r#"{"operations": [{"op": "replace", "find": "remove_me", "replace": ""}]}"#;
+        let req = JsonRequest::parse(input).unwrap();
+        match &req.operations[0].op {
+            Op::Replace {
+                find, replace, ..
+            } => {
+                assert_eq!(find, "remove_me");
+                assert_eq!(replace, "");
+            }
+            _ => panic!("Expected Replace operation"),
+        }
+    }
+
+    // ── Regex validation ──
+
+    #[test]
+    fn test_reject_invalid_regex_in_replace() {
+        let input = r#"{"operations": [{"op": "replace", "find": "fn (foo", "replace": "bar", "regex": true}]}"#;
+        let err = JsonRequest::parse(input).unwrap_err();
+        assert_eq!(err.code, ripsed_core::error::ErrorCode::InvalidRegex);
+    }
+
+    #[test]
+    fn test_reject_invalid_regex_in_delete() {
+        let input =
+            r#"{"operations": [{"op": "delete", "find": "[unclosed", "regex": true}]}"#;
+        let err = JsonRequest::parse(input).unwrap_err();
+        assert_eq!(err.code, ripsed_core::error::ErrorCode::InvalidRegex);
+    }
+
+    #[test]
+    fn test_accept_valid_regex_in_delete() {
+        let input =
+            r#"{"operations": [{"op": "delete", "find": "^\\s*//.*$", "regex": true}]}"#;
+        let req = JsonRequest::parse(input).unwrap();
+        assert_eq!(req.operations.len(), 1);
+    }
+
+    // ── Glob validation ──
+
+    #[test]
+    fn test_accept_valid_glob() {
+        let input = r#"{
+            "operations": [{"op": "replace", "find": "a", "replace": "b", "glob": "**/*.rs"}]
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        assert_eq!(
+            req.operations[0].glob.as_deref(),
+            Some("**/*.rs")
+        );
+    }
+
+    #[test]
+    fn test_reject_empty_glob() {
+        let input = r#"{
+            "operations": [{"op": "replace", "find": "a", "replace": "b", "glob": ""}]
+        }"#;
+        let err = JsonRequest::parse(input).unwrap_err();
+        assert!(err.message.contains("Invalid glob"));
+    }
+
+    #[test]
+    fn test_reject_unmatched_open_bracket() {
+        let input = r#"{
+            "operations": [{"op": "replace", "find": "a", "replace": "b", "glob": "[unclosed"}]
+        }"#;
+        let err = JsonRequest::parse(input).unwrap_err();
+        assert!(err.message.contains("Unmatched '['"));
+    }
+
+    #[test]
+    fn test_reject_unmatched_open_brace() {
+        let input = r#"{
+            "operations": [{"op": "replace", "find": "a", "replace": "b", "glob": "{a,b"}]
+        }"#;
+        let err = JsonRequest::parse(input).unwrap_err();
+        assert!(err.message.contains("Unmatched '{'"));
+    }
+
+    #[test]
+    fn test_reject_unmatched_close_brace() {
+        let input = r#"{
+            "operations": [{"op": "replace", "find": "a", "replace": "b", "glob": "a,b}"}]
+        }"#;
+        let err = JsonRequest::parse(input).unwrap_err();
+        assert!(err.message.contains("Unmatched '}'"));
+    }
+
+    #[test]
+    fn test_accept_valid_alternation_glob() {
+        let input = r#"{
+            "operations": [{"op": "replace", "find": "a", "replace": "b", "glob": "*.{rs,toml}"}]
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        assert_eq!(
+            req.operations[0].glob.as_deref(),
+            Some("*.{rs,toml}")
+        );
+    }
+
+    #[test]
+    fn test_reject_empty_options_glob() {
+        let input = r#"{
+            "operations": [{"op": "replace", "find": "a", "replace": "b"}],
+            "options": {"glob": ""}
+        }"#;
+        let err = JsonRequest::parse(input).unwrap_err();
+        assert!(err.message.contains("Invalid glob in options"));
+    }
+
+    #[test]
+    fn test_reject_malformed_options_ignore() {
+        let input = r#"{
+            "operations": [{"op": "replace", "find": "a", "replace": "b"}],
+            "options": {"ignore": "[bad"}
+        }"#;
+        let err = JsonRequest::parse(input).unwrap_err();
+        assert!(err.message.contains("Invalid ignore glob"));
+    }
+
+    // ── Per-operation glob extraction ──
+
+    #[test]
+    fn test_per_op_glob_overrides_global() {
+        let input = r#"{
+            "operations": [
+                {"op": "replace", "find": "a", "replace": "b", "glob": "*.rs"},
+                {"op": "delete", "find": "c"}
+            ],
+            "options": {"glob": "*.py"}
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        let (ops, _options) = req.into_ops();
+        // First op has per-op glob, should override global
+        assert_eq!(ops[0].1.as_deref(), Some("*.rs"));
+        // Second op has no per-op glob, should inherit global
+        assert_eq!(ops[1].1.as_deref(), Some("*.py"));
+    }
+
+    #[test]
+    fn test_no_glob_yields_none() {
+        let input = r#"{
+            "operations": [{"op": "replace", "find": "a", "replace": "b"}]
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        let (ops, _) = req.into_ops();
+        assert_eq!(ops[0].1, None);
+    }
+
+    // ── Undo requests ──
+
+    #[test]
+    fn test_parse_undo_request() {
+        let input = r#"{"undo": {"last": 3}}"#;
+        let req = JsonRequest::parse(input).unwrap();
+        assert!(req.operations.is_empty());
+        assert_eq!(req.undo.as_ref().unwrap().last, 3);
+    }
+
+    #[test]
+    fn test_reject_undo_with_operations() {
+        let input = r#"{
+            "operations": [{"op": "replace", "find": "a", "replace": "b"}],
+            "undo": {"last": 1}
+        }"#;
+        let err = JsonRequest::parse(input).unwrap_err();
+        assert!(err.message.contains("both 'operations' and 'undo'"));
+    }
+
+    #[test]
+    fn test_reject_undo_zero() {
+        let input = r#"{"undo": {"last": 0}}"#;
+        let err = JsonRequest::parse(input).unwrap_err();
+        assert!(err.message.contains("'last' must be at least 1"));
+    }
+
+    // ── Forward compatibility: extra fields preserved ──
+
+    #[test]
+    fn test_extra_top_level_fields_preserved() {
+        let input = r#"{
+            "operations": [{"op": "replace", "find": "a", "replace": "b"}],
+            "metadata": {"agent": "test-agent", "request_id": "abc123"}
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        assert!(req.extra.contains_key("metadata"));
+        let metadata = req.extra.get("metadata").unwrap();
+        assert_eq!(
+            metadata.get("agent").and_then(|v| v.as_str()),
+            Some("test-agent")
+        );
+    }
+
+    #[test]
+    fn test_unknown_top_level_fields_do_not_cause_error() {
+        let input = r#"{
+            "operations": [{"op": "replace", "find": "a", "replace": "b"}],
+            "future_field": true,
+            "another_thing": [1, 2, 3]
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        assert_eq!(req.extra.len(), 2);
+    }
+
+    // ── Unknown operation type ──
+
+    #[test]
+    fn test_unknown_op_type_rejected() {
+        let input = r#"{
+            "operations": [{"op": "transform", "find": "a", "mode": "uppercase"}]
+        }"#;
+        let err = JsonRequest::parse(input);
+        assert!(err.is_err());
+    }
+
+    // ── Unicode patterns ──
+
+    #[test]
+    fn test_unicode_find_replace() {
+        let input = r#"{
+            "operations": [{"op": "replace", "find": "\u00e9l\u00e8ve", "replace": "\u00e9tudiant"}]
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        match &req.operations[0].op {
+            Op::Replace {
+                find, replace, ..
+            } => {
+                assert_eq!(find, "\u{00e9}l\u{00e8}ve");
+                assert_eq!(replace, "\u{00e9}tudiant");
+            }
+            _ => panic!("Expected Replace"),
+        }
+    }
+
+    #[test]
+    fn test_cjk_find_pattern() {
+        let input = r#"{
+            "operations": [{"op": "replace", "find": "\u4f60\u597d", "replace": "\u5168\u7403"}]
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        match &req.operations[0].op {
+            Op::Replace { find, .. } => {
+                assert_eq!(find, "\u{4f60}\u{597d}");
+            }
+            _ => panic!("Expected Replace"),
+        }
+    }
+
+    #[test]
+    fn test_emoji_in_content() {
+        let input = r#"{
+            "operations": [{
+                "op": "insert_after",
+                "find": "// header",
+                "content": "// \u2764\ufe0f love this code"
+            }]
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        match &req.operations[0].op {
+            Op::InsertAfter { content, .. } => {
+                assert!(content.contains('\u{2764}'));
+            }
+            _ => panic!("Expected InsertAfter"),
+        }
+    }
+
+    // ── Options parsing ──
+
+    #[test]
+    fn test_parse_options() {
+        let input = r#"{
+            "operations": [{"op": "replace", "find": "a", "replace": "b"}],
+            "options": {
+                "dry_run": false,
+                "root": "./my-project",
+                "gitignore": true,
+                "backup": true,
+                "atomic": true,
+                "glob": "**/*.rs",
+                "hidden": true,
+                "max_depth": 5
+            }
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        assert!(!req.options.dry_run);
+        assert_eq!(req.options.root.as_deref(), Some("./my-project"));
+        assert!(req.options.gitignore);
+        assert!(req.options.backup);
+        assert!(req.options.atomic);
+        assert_eq!(req.options.glob.as_deref(), Some("**/*.rs"));
+        assert!(req.options.hidden);
+        assert_eq!(req.options.max_depth, Some(5));
+    }
+
+    #[test]
+    fn test_default_options() {
+        let input = r#"{"operations": [{"op": "replace", "find": "a", "replace": "b"}]}"#;
+        let req = JsonRequest::parse(input).unwrap();
+        assert!(req.options.dry_run);
+        assert!(req.options.gitignore);
+        assert!(!req.options.backup);
+        assert!(!req.options.atomic);
+        assert!(!req.options.hidden);
+        assert!(req.options.glob.is_none());
+        assert!(req.options.root.is_none());
+    }
+
+    // ── Case insensitive flag ──
+
+    #[test]
+    fn test_case_insensitive_flag() {
+        let input = r#"{
+            "operations": [{"op": "replace", "find": "hello", "replace": "world", "case_insensitive": true}]
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        match &req.operations[0].op {
+            Op::Replace {
+                case_insensitive, ..
+            } => {
+                assert!(case_insensitive);
+            }
+            _ => panic!("Expected Replace"),
+        }
+    }
+
+    // ── Batch operations ──
+
+    #[test]
+    fn test_multiple_operations() {
+        let input = r#"{
+            "operations": [
+                {"op": "replace", "find": "old_fn", "replace": "new_fn", "glob": "src/**/*.rs"},
+                {"op": "delete", "find": "^\\s*//\\s*TODO:.*$", "regex": true, "glob": "**/*.rs"},
+                {"op": "insert_after", "find": "use serde::Deserialize;", "content": "use serde::Serialize;", "glob": "src/models/*.rs"}
+            ],
+            "options": {"dry_run": true}
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        assert_eq!(req.operations.len(), 3);
+    }
+
+    // ── Nested validation errors ──
+
+    #[test]
+    fn test_first_bad_op_reports_index() {
+        let input = r#"{
+            "operations": [
+                {"op": "replace", "find": "good", "replace": "fine"},
+                {"op": "replace", "find": "", "replace": "bad"}
+            ]
+        }"#;
+        let err = JsonRequest::parse(input).unwrap_err();
+        assert!(err.message.contains("Operation 1"));
+    }
+
+    #[test]
+    fn test_bad_regex_reports_index() {
+        let input = r#"{
+            "operations": [
+                {"op": "replace", "find": "ok", "replace": "fine"},
+                {"op": "delete", "find": "[bad", "regex": true}
+            ]
+        }"#;
+        let err = JsonRequest::parse(input).unwrap_err();
+        assert_eq!(err.code, ripsed_core::error::ErrorCode::InvalidRegex);
+        assert_eq!(err.operation_index, Some(1));
+    }
+
+    // ── Design doc example: full agent workflow request ──
+
+    #[test]
+    fn test_design_doc_rename_struct_request() {
+        let input = r#"{
+            "operations": [
+                {
+                    "op": "replace",
+                    "find": "UserConfig",
+                    "replace": "AppConfig",
+                    "glob": "**/*.rs"
+                }
+            ],
+            "options": { "dry_run": true, "root": "/home/dev/my-project" }
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        assert_eq!(req.operations.len(), 1);
+        assert!(req.options.dry_run);
+        assert_eq!(
+            req.options.root.as_deref(),
+            Some("/home/dev/my-project")
+        );
+        let (ops, _) = req.into_ops();
+        assert_eq!(ops[0].1.as_deref(), Some("**/*.rs"));
+    }
+
+    #[test]
+    fn test_design_doc_full_request_example() {
+        let input = r#"{
+            "version": "1",
+            "operations": [
+                {
+                    "op": "replace",
+                    "find": "old_function_name",
+                    "replace": "new_function_name",
+                    "regex": false,
+                    "glob": "src/**/*.rs",
+                    "case_insensitive": false
+                },
+                {
+                    "op": "delete",
+                    "find": "^\\s*//\\s*TODO:.*$",
+                    "regex": true,
+                    "glob": "**/*.rs"
+                },
+                {
+                    "op": "insert_after",
+                    "find": "use serde::Deserialize;",
+                    "content": "use serde::Serialize;",
+                    "glob": "src/models/*.rs"
+                }
+            ],
+            "options": {
+                "dry_run": true,
+                "root": "./my-project",
+                "gitignore": true,
+                "backup": false,
+                "atomic": true
+            }
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        assert_eq!(req.version, "1");
+        assert_eq!(req.operations.len(), 3);
+        assert!(req.options.dry_run);
+        assert!(req.options.atomic);
+        assert!(!req.options.backup);
+    }
+
+    #[test]
+    fn test_design_doc_undo_request() {
+        let input = r#"{"undo": {"last": 1}}"#;
+        let req = JsonRequest::parse(input).unwrap();
+        assert_eq!(req.undo.unwrap().last, 1);
+    }
+
+    // ── Serialization roundtrip ──
+
+    #[test]
+    fn test_serialize_then_parse_roundtrip() {
+        let request = JsonRequest {
+            version: "1".to_string(),
+            operations: vec![JsonOp {
+                op: Op::Replace {
+                    find: "foo".to_string(),
+                    replace: "bar".to_string(),
+                    regex: false,
+                    case_insensitive: false,
+                },
+                glob: Some("**/*.rs".to_string()),
+            }],
+            options: OpOptions::default(),
+            undo: None,
+            extra: serde_json::Map::new(),
+        };
+        let json = serde_json::to_string(&request).unwrap();
+        let parsed = JsonRequest::parse(&json).unwrap();
+        assert_eq!(parsed.operations.len(), 1);
+        assert_eq!(
+            parsed.operations[0].glob.as_deref(),
+            Some("**/*.rs")
+        );
     }
 }
