@@ -237,6 +237,64 @@ fn validate_op(index: usize, op: &Op) -> Result<(), RipsedError> {
                 validate_regex(index, find)?;
             }
         }
+        Op::Transform { find, regex, .. } => {
+            if find.is_empty() {
+                return Err(RipsedError::invalid_request(
+                    format!("Operation {index}: 'find' must not be empty for transform."),
+                    format!("Set a non-empty 'find' pattern in operation {index}."),
+                ));
+            }
+            if *regex {
+                validate_regex(index, find)?;
+            }
+        }
+        Op::Surround {
+            find,
+            prefix,
+            suffix,
+            regex,
+            ..
+        } => {
+            if find.is_empty() {
+                return Err(RipsedError::invalid_request(
+                    format!("Operation {index}: 'find' must not be empty for surround."),
+                    format!("Set a non-empty 'find' pattern in operation {index}."),
+                ));
+            }
+            if prefix.is_empty() && suffix.is_empty() {
+                return Err(RipsedError::invalid_request(
+                    format!(
+                        "Operation {index}: 'prefix' or 'suffix' must not both be empty for surround."
+                    ),
+                    format!("Set a non-empty 'prefix' or 'suffix' in operation {index}."),
+                ));
+            }
+            if *regex {
+                validate_regex(index, find)?;
+            }
+        }
+        Op::Indent { find, regex, .. } => {
+            if find.is_empty() {
+                return Err(RipsedError::invalid_request(
+                    format!("Operation {index}: 'find' must not be empty for indent."),
+                    format!("Set a non-empty 'find' pattern in operation {index}."),
+                ));
+            }
+            if *regex {
+                validate_regex(index, find)?;
+            }
+        }
+        Op::Dedent { find, regex, .. } => {
+            if find.is_empty() {
+                return Err(RipsedError::invalid_request(
+                    format!("Operation {index}: 'find' must not be empty for dedent."),
+                    format!("Set a non-empty 'find' pattern in operation {index}."),
+                ));
+            }
+            if *regex {
+                validate_regex(index, find)?;
+            }
+        }
     }
 
     Ok(())
@@ -701,10 +759,76 @@ mod tests {
     #[test]
     fn test_unknown_op_type_rejected() {
         let input = r#"{
-            "operations": [{"op": "transform", "find": "a", "mode": "uppercase"}]
+            "operations": [{"op": "explode", "find": "a"}]
         }"#;
         let err = JsonRequest::parse(input);
         assert!(err.is_err());
+    }
+
+    #[test]
+    fn test_parse_transform() {
+        let input = r#"{
+            "operations": [{"op": "transform", "find": "hello", "mode": "upper"}]
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        match &req.operations[0].op {
+            Op::Transform { find, mode, .. } => {
+                assert_eq!(find, "hello");
+                assert_eq!(*mode, ripsed_core::operation::TransformMode::Upper);
+            }
+            _ => panic!("Expected Transform operation"),
+        }
+    }
+
+    #[test]
+    fn test_parse_surround() {
+        let input = r#"{
+            "operations": [{"op": "surround", "find": "word", "prefix": "(", "suffix": ")"}]
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        match &req.operations[0].op {
+            Op::Surround {
+                find,
+                prefix,
+                suffix,
+                ..
+            } => {
+                assert_eq!(find, "word");
+                assert_eq!(prefix, "(");
+                assert_eq!(suffix, ")");
+            }
+            _ => panic!("Expected Surround operation"),
+        }
+    }
+
+    #[test]
+    fn test_parse_indent() {
+        let input = r#"{
+            "operations": [{"op": "indent", "find": "fn main", "amount": 2}]
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        match &req.operations[0].op {
+            Op::Indent { find, amount, .. } => {
+                assert_eq!(find, "fn main");
+                assert_eq!(*amount, 2);
+            }
+            _ => panic!("Expected Indent operation"),
+        }
+    }
+
+    #[test]
+    fn test_parse_dedent() {
+        let input = r#"{
+            "operations": [{"op": "dedent", "find": "nested", "amount": 4}]
+        }"#;
+        let req = JsonRequest::parse(input).unwrap();
+        match &req.operations[0].op {
+            Op::Dedent { find, amount, .. } => {
+                assert_eq!(find, "nested");
+                assert_eq!(*amount, 4);
+            }
+            _ => panic!("Expected Dedent operation"),
+        }
     }
 
     // ── Unicode patterns ──

@@ -1,5 +1,5 @@
 use clap::Parser;
-use ripsed_core::operation::LineRange;
+use ripsed_core::operation::{LineRange, TransformMode};
 
 /// ripsed — a fast, modern stream editor. Like sed, but better.
 #[derive(Parser, Debug)]
@@ -114,6 +114,30 @@ pub struct Cli {
     /// Path to .ripsed.toml config file
     #[arg(long)]
     pub config: Option<String>,
+
+    /// Transform matched text (modes: upper, lower, title, snake_case, camel_case)
+    #[arg(long, value_parser = parse_transform_mode)]
+    pub transform: Option<TransformMode>,
+
+    /// Surround matching lines with prefix and suffix
+    #[arg(long, num_args = 2, value_names = ["PREFIX", "SUFFIX"])]
+    pub surround: Option<Vec<String>>,
+
+    /// Indent matching lines by N spaces
+    #[arg(long)]
+    pub indent: Option<usize>,
+
+    /// Remove up to N leading spaces from matching lines
+    #[arg(long)]
+    pub dedent: Option<usize>,
+
+    /// Run operations from a .rip script file
+    #[arg(long)]
+    pub script: Option<String>,
+}
+
+fn parse_transform_mode(s: &str) -> Result<TransformMode, String> {
+    s.parse()
 }
 
 /// Parse a line range string in "N:M" format into a `LineRange`.

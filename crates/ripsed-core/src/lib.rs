@@ -4,5 +4,6 @@ pub mod engine;
 pub mod error;
 pub mod matcher;
 pub mod operation;
+pub mod script;
 pub mod suggestion;
 pub mod undo;

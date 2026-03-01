@@ -1,0 +1,37 @@
+[package]
+name = "ripsed-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021" # Use 2021 for fuzz compatibility
+
+# This is a standalone package, not part of the parent workspace.
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+ripsed-core = { path = "../crates/ripsed-core" }
+ripsed-json = { path = "../crates/ripsed-json" }
+arbitrary = { version = "1", features = ["derive"] }
+
+[[bin]]
+name = "fuzz_regex_input"
+path = "fuzz_targets/fuzz_regex_input.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_json_request"
+path = "fuzz_targets/fuzz_json_request.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_engine"
+path = "fuzz_targets/fuzz_engine.rs"
+doc = false
+
+[[bin]]
+name = "fuzz_autodetect"
+path = "fuzz_targets/fuzz_autodetect.rs"
+doc = false
