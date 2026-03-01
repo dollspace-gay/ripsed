@@ -1,6 +1,7 @@
 [package]
 name = "ripsed-cli"
 description = "CLI binary for ripsed"
+readme = "../../README.md"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
