@@ -1,4 +1,5 @@
 use clap::Parser;
+use ripsed_core::operation::LineRange;
 
 /// ripsed — a fast, modern stream editor. Like sed, but better.
 #[derive(Parser, Debug)]
@@ -15,15 +16,15 @@ pub struct Cli {
     pub regex: bool,
 
     /// Delete matching lines
-    #[arg(short, long)]
+    #[arg(short = 'd', long)]
     pub delete: bool,
 
     /// Modify files in place
-    #[arg(short, long)]
+    #[arg(short = 'i', long)]
     pub in_place: bool,
 
     /// Read from stdin, write to stdout
-    #[arg(short, long)]
+    #[arg(short = 'p', long)]
     pub pipe: bool,
 
     /// Preview changes without writing
@@ -51,7 +52,7 @@ pub struct Cli {
     pub no_gitignore: bool,
 
     /// Enable agent/JSON mode
-    #[arg(short, long)]
+    #[arg(short = 'j', long)]
     pub json: bool,
 
     /// JSON input as argument (for --json mode)
@@ -79,11 +80,11 @@ pub struct Cli {
     pub replace_line: Option<String>,
 
     /// Only operate on lines N through M (format: N:M)
-    #[arg(short = 'n', long)]
-    pub line_range: Option<String>,
+    #[arg(short = 'n', long, value_parser = parse_line_range)]
+    pub line_range: Option<LineRange>,
 
     /// Maximum directory recursion depth
-    #[arg(long)]
+    #[arg(long, value_parser = parse_max_depth)]
     pub max_depth: Option<usize>,
 
     /// Case-insensitive matching
@@ -91,14 +92,171 @@ pub struct Cli {
     pub case_insensitive: bool,
 
     /// Print count of matches/replacements only
-    #[arg(short, long)]
+    #[arg(short = 'c', long)]
     pub count: bool,
 
     /// Suppress all non-error output
-    #[arg(short, long)]
+    #[arg(short = 'q', long)]
     pub quiet: bool,
 
     /// Interactive confirmation before each change
     #[arg(long)]
     pub confirm: bool,
+
+    /// Undo last N operations (default: 1)
+    #[arg(long, num_args = 0..=1, default_missing_value = "1")]
+    pub undo: Option<usize>,
+
+    /// Show recent undo log
+    #[arg(long)]
+    pub undo_list: bool,
+
+    /// Path to .ripsed.toml config file
+    #[arg(long)]
+    pub config: Option<String>,
+}
+
+/// Parse a line range string in "N:M" format into a `LineRange`.
+///
+/// Accepted formats:
+///   - "N:M" — lines N through M (inclusive, 1-indexed)
+///   - "N:"  — line N through end of file
+///   - "N"   — shorthand for "N:" (line N through end)
+///
+/// Both N and M must be >= 1, and if both are present, N <= M.
+fn parse_line_range(s: &str) -> Result<LineRange, String> {
+    if let Some((start_str, end_str)) = s.split_once(':') {
+        let start: usize = start_str
+            .parse()
+            .map_err(|_| format!("invalid line range start: '{start_str}'"))?;
+        if start == 0 {
+            return Err("line range start must be >= 1".to_string());
+        }
+        if end_str.is_empty() {
+            Ok(LineRange { start, end: None })
+        } else {
+            let end: usize = end_str
+                .parse()
+                .map_err(|_| format!("invalid line range end: '{end_str}'"))?;
+            if end == 0 {
+                return Err("line range end must be >= 1".to_string());
+            }
+            if start > end {
+                return Err(format!(
+                    "line range start ({start}) must be <= end ({end})"
+                ));
+            }
+            Ok(LineRange {
+                start,
+                end: Some(end),
+            })
+        }
+    } else {
+        // Single number: treat as "N:" (N through end)
+        let start: usize = s
+            .parse()
+            .map_err(|_| format!("invalid line range: '{s}'"))?;
+        if start == 0 {
+            return Err("line range start must be >= 1".to_string());
+        }
+        Ok(LineRange { start, end: None })
+    }
+}
+
+/// Value parser for `--max-depth` that rejects 0.
+fn parse_max_depth(s: &str) -> Result<usize, String> {
+    let val: usize = s
+        .parse()
+        .map_err(|_| format!("invalid max-depth: '{s}'"))?;
+    if val == 0 {
+        return Err("max-depth must be >= 1".to_string());
+    }
+    Ok(val)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ---- parse_line_range tests ----
+
+    #[test]
+    fn test_parse_line_range_full() {
+        let r = parse_line_range("5:10").unwrap();
+        assert_eq!(r.start, 5);
+        assert_eq!(r.end, Some(10));
+    }
+
+    #[test]
+    fn test_parse_line_range_open_end() {
+        let r = parse_line_range("3:").unwrap();
+        assert_eq!(r.start, 3);
+        assert_eq!(r.end, None);
+    }
+
+    #[test]
+    fn test_parse_line_range_single_number() {
+        let r = parse_line_range("7").unwrap();
+        assert_eq!(r.start, 7);
+        assert_eq!(r.end, None);
+    }
+
+    #[test]
+    fn test_parse_line_range_same_start_end() {
+        let r = parse_line_range("4:4").unwrap();
+        assert_eq!(r.start, 4);
+        assert_eq!(r.end, Some(4));
+    }
+
+    #[test]
+    fn test_parse_line_range_rejects_zero_start() {
+        let err = parse_line_range("0:5").unwrap_err();
+        assert!(err.contains("must be >= 1"), "got: {err}");
+    }
+
+    #[test]
+    fn test_parse_line_range_rejects_zero_end() {
+        let err = parse_line_range("1:0").unwrap_err();
+        assert!(err.contains("must be >= 1"), "got: {err}");
+    }
+
+    #[test]
+    fn test_parse_line_range_rejects_start_gt_end() {
+        let err = parse_line_range("10:5").unwrap_err();
+        assert!(err.contains("must be <= end"), "got: {err}");
+    }
+
+    #[test]
+    fn test_parse_line_range_rejects_non_numeric() {
+        assert!(parse_line_range("abc").is_err());
+        assert!(parse_line_range("1:xyz").is_err());
+        assert!(parse_line_range("abc:5").is_err());
+    }
+
+    #[test]
+    fn test_parse_line_range_rejects_zero_single() {
+        let err = parse_line_range("0").unwrap_err();
+        assert!(err.contains("must be >= 1"), "got: {err}");
+    }
+
+    // ---- parse_max_depth tests ----
+
+    #[test]
+    fn test_parse_max_depth_valid() {
+        assert_eq!(parse_max_depth("1").unwrap(), 1);
+        assert_eq!(parse_max_depth("5").unwrap(), 5);
+        assert_eq!(parse_max_depth("100").unwrap(), 100);
+    }
+
+    #[test]
+    fn test_parse_max_depth_rejects_zero() {
+        let err = parse_max_depth("0").unwrap_err();
+        assert!(err.contains("must be >= 1"), "got: {err}");
+    }
+
+    #[test]
+    fn test_parse_max_depth_rejects_non_numeric() {
+        assert!(parse_max_depth("abc").is_err());
+        assert!(parse_max_depth("-1").is_err());
+    }
 }
