@@ -1,5 +1,7 @@
 use predicates::prelude::*;
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::symlink;
 use tempfile::TempDir;
 
 /// Helper: create a temp directory with a single text file.
@@ -415,4 +417,253 @@ fn replace_empty_string_removes_occurrences() {
         .assert()
         .success()
         .stdout("keep  keep\n");
+}
+
+// ── Parallel discovery wiring ──
+
+#[test]
+fn discover_files_auto_finds_files_in_small_directory() {
+    // Verifies that discover_files_auto (wired in file_mode) works with a small
+    // directory. This exercises the serial path of discover_files_auto.
+    let dir = setup_multi_file(&[
+        ("a.txt", "hello world\n"),
+        ("b.txt", "hello world\n"),
+        ("sub/c.txt", "hello world\n"),
+    ]);
+
+    assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["hello", "goodbye"])
+        .current_dir(dir.path())
+        .assert()
+        .success();
+
+    for name in &["a.txt", "b.txt", "sub/c.txt"] {
+        let content = fs::read_to_string(dir.path().join(name)).unwrap();
+        assert!(
+            content.contains("goodbye"),
+            "File {name} should have been discovered and modified"
+        );
+    }
+}
+
+// ── Config default merging ──
+
+#[test]
+fn config_defaults_backup_creates_bak_file() {
+    let dir = setup_single_file("test.txt", "original content\n");
+    // Write a .ripsed.toml that enables backup by default
+    fs::write(
+        dir.path().join(".ripsed.toml"),
+        "[defaults]\nbackup = true\n",
+    )
+    .unwrap();
+
+    assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["original", "modified"])
+        .current_dir(dir.path())
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(dir.path().join("test.txt")).unwrap();
+    assert!(content.contains("modified content"));
+
+    let backup_path = dir.path().join("test.txt.ripsed.bak");
+    assert!(
+        backup_path.exists(),
+        "Config defaults.backup=true should create backup files"
+    );
+    let backup = fs::read_to_string(&backup_path).unwrap();
+    assert_eq!(backup, "original content\n");
+}
+
+#[test]
+fn config_defaults_max_depth_limits_recursion() {
+    let dir = setup_multi_file(&[
+        ("shallow.txt", "target_text\n"),
+        ("a/medium.txt", "target_text\n"),
+        ("a/b/deep.txt", "target_text\n"),
+    ]);
+    // max_depth = 1 means only the root directory itself
+    fs::write(
+        dir.path().join(".ripsed.toml"),
+        "[defaults]\nmax_depth = 1\n",
+    )
+    .unwrap();
+
+    assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["target_text", "replaced"])
+        .current_dir(dir.path())
+        .assert()
+        .success();
+
+    let shallow = fs::read_to_string(dir.path().join("shallow.txt")).unwrap();
+    assert!(
+        shallow.contains("replaced"),
+        "Shallow file should be modified"
+    );
+
+    let deep = fs::read_to_string(dir.path().join("a/b/deep.txt")).unwrap();
+    assert_eq!(
+        deep, "target_text\n",
+        "Deep file should be untouched due to max_depth=1"
+    );
+}
+
+#[test]
+fn config_defaults_gitignore_false_includes_gitignored_files() {
+    let dir = setup_single_file("ignored.log", "target_text\n");
+    // Set up a git repo with .gitignore
+    fs::write(dir.path().join(".gitignore"), "*.log\n").unwrap();
+    // Initialize a git repo so .gitignore is respected
+    std::process::Command::new("git")
+        .args(["init"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    // With default config (gitignore=true), the .log file should be ignored.
+    // With gitignore=false in config, it should be found.
+    fs::write(
+        dir.path().join(".ripsed.toml"),
+        "[defaults]\ngitignore = false\n",
+    )
+    .unwrap();
+
+    assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["target_text", "replaced"])
+        .current_dir(dir.path())
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(dir.path().join("ignored.log")).unwrap();
+    assert!(
+        content.contains("replaced"),
+        "With gitignore=false, gitignored files should be processed"
+    );
+}
+
+#[test]
+fn cli_no_gitignore_overrides_config_gitignore_true() {
+    let dir = setup_single_file("ignored.log", "target_text\n");
+    fs::write(dir.path().join(".gitignore"), "*.log\n").unwrap();
+    std::process::Command::new("git")
+        .args(["init"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    // Config says gitignore=true (the default), but CLI says --no-gitignore
+    fs::write(
+        dir.path().join(".ripsed.toml"),
+        "[defaults]\ngitignore = true\n",
+    )
+    .unwrap();
+
+    assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["--no-gitignore", "target_text", "replaced"])
+        .current_dir(dir.path())
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(dir.path().join("ignored.log")).unwrap();
+    assert!(
+        content.contains("replaced"),
+        "--no-gitignore should override config defaults.gitignore=true"
+    );
+}
+
+#[test]
+fn cli_max_depth_overrides_config_max_depth() {
+    let dir = setup_multi_file(&[
+        ("shallow.txt", "target_text\n"),
+        ("a/b/deep.txt", "target_text\n"),
+    ]);
+    // Config sets max_depth = 1
+    fs::write(
+        dir.path().join(".ripsed.toml"),
+        "[defaults]\nmax_depth = 1\n",
+    )
+    .unwrap();
+
+    // CLI --max-depth 10 should override the config
+    assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["--max-depth", "10", "target_text", "replaced"])
+        .current_dir(dir.path())
+        .assert()
+        .success();
+
+    let deep = fs::read_to_string(dir.path().join("a/b/deep.txt")).unwrap();
+    assert!(
+        deep.contains("replaced"),
+        "CLI --max-depth should override config defaults.max_depth"
+    );
+}
+
+// ── --pipe flag ──
+
+#[test]
+fn pipe_flag_forces_pipe_mode() {
+    // --pipe should read from stdin and write to stdout, even without
+    // auto-detection of piped input.
+    assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["--pipe", "hello", "goodbye"])
+        .write_stdin("hello world\nhello again\n")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("goodbye world"))
+        .stdout(predicate::str::contains("goodbye again"));
+}
+
+#[test]
+fn pipe_flag_short_form() {
+    assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["-p", "foo", "bar"])
+        .write_stdin("foo baz\n")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("bar baz"));
+}
+
+// ── --follow flag ──
+
+#[cfg(unix)]
+#[test]
+fn follow_flag_follows_symlinks() {
+    let dir = TempDir::new().unwrap();
+    let real_dir = dir.path().join("real");
+    fs::create_dir_all(&real_dir).unwrap();
+    fs::write(real_dir.join("target.txt"), "hello world\n").unwrap();
+
+    // Create a symlink to the real directory
+    let link_path = dir.path().join("link");
+    symlink(&real_dir, &link_path).unwrap();
+
+    // Without --follow, symlinked directories are not followed, so the file
+    // under "link/" may not be discovered. With --follow it should be.
+    assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["--follow", "hello", "goodbye"])
+        .current_dir(dir.path())
+        .assert()
+        .success();
+
+    // The file under the real directory should be modified (found via both
+    // real path and the followed symlink).
+    let content = fs::read_to_string(real_dir.join("target.txt")).unwrap();
+    assert!(
+        content.contains("goodbye"),
+        "With --follow, files behind symlinks should be discovered"
+    );
+}
+
+// ── --in-place removed ──
+
+#[test]
+fn in_place_flag_is_removed() {
+    // Verify that --in-place is no longer accepted
+    assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["--in-place", "hello", "goodbye"])
+        .write_stdin("hello\n")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unexpected argument"));
 }

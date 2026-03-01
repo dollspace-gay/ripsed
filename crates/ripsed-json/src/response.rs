@@ -28,6 +28,14 @@ pub struct UndoSummary {
     pub log_entries_remaining: usize,
 }
 
+impl UndoResponse {
+    /// Serialize to JSON string.
+    pub fn to_json(&self) -> String {
+        serde_json::to_string_pretty(self)
+            .unwrap_or_else(|_| r#"{"version":"1","success":false}"#.to_string())
+    }
+}
+
 impl JsonResponse {
     /// Build a success response.
     pub fn success(dry_run: bool, summary: Summary, results: Vec<OpResult>) -> Self {
