@@ -1,6 +1,11 @@
 use std::fs;
 use tempfile::TempDir;
 
+/// Escape a path for safe embedding in a JSON string (handles Windows backslashes).
+fn json_path(dir: &TempDir) -> String {
+    dir.path().display().to_string().replace('\\', "\\\\")
+}
+
 /// Helper: create a temp dir with files and return the dir.
 fn setup_json_test(files: &[(&str, &str)]) -> TempDir {
     let dir = TempDir::new().unwrap();
@@ -25,7 +30,7 @@ fn json_single_replace_response_schema() {
 
     let request = json_request(
         r#"{"op": "replace", "find": "old_value", "replace": "new_value"}"#,
-        &format!(r#""dry_run": true, "root": "{}""#, dir.path().display()),
+        &format!(r#""dry_run": true, "root": "{}""#, json_path(&dir)),
     );
 
     let output = assert_cmd::cargo_bin_cmd!("ripsed")
@@ -69,7 +74,7 @@ fn json_batch_operations_with_operation_index() {
             ],
             "options": {{"dry_run": true, "root": "{}"}}
         }}"#,
-        dir.path().display()
+        json_path(&dir)
     );
 
     let output = assert_cmd::cargo_bin_cmd!("ripsed")
@@ -109,7 +114,7 @@ fn json_dry_run_defaults_to_true() {
             "operations": [{{"op": "replace", "find": "original", "replace": "modified"}}],
             "options": {{"root": "{}"}}
         }}"#,
-        dir.path().display()
+        json_path(&dir)
     );
 
     let output = assert_cmd::cargo_bin_cmd!("ripsed")
@@ -144,7 +149,7 @@ fn json_dry_run_false_modifies_files() {
             "operations": [{{"op": "replace", "find": "original", "replace": "modified"}}],
             "options": {{"dry_run": false, "root": "{}"}}
         }}"#,
-        dir.path().display()
+        json_path(&dir)
     );
 
     let output = assert_cmd::cargo_bin_cmd!("ripsed")
@@ -183,7 +188,7 @@ fn json_invalid_regex_error_response() {
             "operations": [{{"op": "replace", "find": "fn (unclosed", "replace": "x", "regex": true}}],
             "options": {{"dry_run": true, "root": "{}"}}
         }}"#,
-        dir.path().display()
+        json_path(&dir)
     );
 
     let output = assert_cmd::cargo_bin_cmd!("ripsed")
@@ -292,7 +297,7 @@ fn json_replace_operation() {
             "operations": [{{"op": "replace", "find": "beta", "replace": "BETA"}}],
             "options": {{"dry_run": false, "root": "{}"}}
         }}"#,
-        dir.path().display()
+        json_path(&dir)
     );
 
     let output = assert_cmd::cargo_bin_cmd!("ripsed")
@@ -317,7 +322,7 @@ fn json_delete_operation() {
             "operations": [{{"op": "delete", "find": "remove"}}],
             "options": {{"dry_run": false, "root": "{}"}}
         }}"#,
-        dir.path().display()
+        json_path(&dir)
     );
 
     let output = assert_cmd::cargo_bin_cmd!("ripsed")
@@ -344,7 +349,7 @@ fn json_insert_after_operation() {
             "operations": [{{"op": "insert_after", "find": "marker", "content": "INSERTED"}}],
             "options": {{"dry_run": false, "root": "{}"}}
         }}"#,
-        dir.path().display()
+        json_path(&dir)
     );
 
     let output = assert_cmd::cargo_bin_cmd!("ripsed")
@@ -375,7 +380,7 @@ fn json_insert_before_operation() {
             "operations": [{{"op": "insert_before", "find": "marker", "content": "INSERTED"}}],
             "options": {{"dry_run": false, "root": "{}"}}
         }}"#,
-        dir.path().display()
+        json_path(&dir)
     );
 
     let output = assert_cmd::cargo_bin_cmd!("ripsed")
@@ -407,7 +412,7 @@ fn json_replace_line_operation() {
             "operations": [{{"op": "replace_line", "find": "old line", "content": "brand new line"}}],
             "options": {{"dry_run": false, "root": "{}"}}
         }}"#,
-        dir.path().display()
+        json_path(&dir)
     );
 
     let output = assert_cmd::cargo_bin_cmd!("ripsed")
@@ -434,7 +439,7 @@ fn json_response_has_change_details() {
             "operations": [{{"op": "replace", "find": "bbb", "replace": "BBB"}}],
             "options": {{"dry_run": true, "root": "{}"}}
         }}"#,
-        dir.path().display()
+        json_path(&dir)
     );
 
     let output = assert_cmd::cargo_bin_cmd!("ripsed")
@@ -476,7 +481,7 @@ fn json_regex_replace() {
             }}],
             "options": {{"dry_run": false, "root": "{}"}}
         }}"#,
-        dir.path().display()
+        json_path(&dir)
     );
 
     let output = assert_cmd::cargo_bin_cmd!("ripsed")
@@ -510,7 +515,7 @@ fn json_per_operation_glob() {
             }}],
             "options": {{"dry_run": false, "root": "{}"}}
         }}"#,
-        dir.path().display()
+        json_path(&dir)
     );
 
     let output = assert_cmd::cargo_bin_cmd!("ripsed")
@@ -545,7 +550,7 @@ fn json_case_insensitive_replace() {
             }}],
             "options": {{"dry_run": false, "root": "{}"}}
         }}"#,
-        dir.path().display()
+        json_path(&dir)
     );
 
     let output = assert_cmd::cargo_bin_cmd!("ripsed")

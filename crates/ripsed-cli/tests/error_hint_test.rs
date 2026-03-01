@@ -1,6 +1,11 @@
 use std::fs;
 use tempfile::TempDir;
 
+/// Escape a path for safe embedding in a JSON string (handles Windows backslashes).
+fn json_path(dir: &TempDir) -> String {
+    dir.path().display().to_string().replace('\\', "\\\\")
+}
+
 /// Helper: create a temp dir with files.
 fn setup_test(files: &[(&str, &str)]) -> TempDir {
     let dir = TempDir::new().unwrap();
@@ -29,7 +34,7 @@ fn invalid_regex_error_has_hint_and_pattern_in_context() {
             }}],
             "options": {{"dry_run": true, "root": "{}"}}
         }}"#,
-        dir.path().display()
+        json_path(&dir)
     );
 
     let output = assert_cmd::cargo_bin_cmd!("ripsed")
@@ -171,7 +176,7 @@ fn invalid_regex_error_includes_operation_index() {
             ],
             "options": {{"dry_run": true, "root": "{}"}}
         }}"#,
-        dir.path().display()
+        json_path(&dir)
     );
 
     let output = assert_cmd::cargo_bin_cmd!("ripsed")
@@ -256,7 +261,7 @@ fn all_error_codes_produce_nonempty_hints() {
                 "operations": [{{"op": "replace", "find": "(bad", "replace": "x", "regex": true}}],
                 "options": {{"dry_run": true, "root": "{}"}}
             }}"#,
-            dir.path().display()
+            json_path(&dir)
         );
 
         let output = assert_cmd::cargo_bin_cmd!("ripsed")

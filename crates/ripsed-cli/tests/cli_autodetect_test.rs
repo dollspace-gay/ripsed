@@ -2,6 +2,11 @@ use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
 
+/// Escape a path for safe embedding in a JSON string (handles Windows backslashes).
+fn json_path(dir: &TempDir) -> String {
+    dir.path().display().to_string().replace('\\', "\\\\")
+}
+
 /// Helper: create a temp dir with files.
 fn setup_test(files: &[(&str, &str)]) -> TempDir {
     let dir = TempDir::new().unwrap();
@@ -28,7 +33,7 @@ fn json_stdin_detected_as_agent_mode() {
             "operations": [{{"op": "replace", "find": "old_value", "replace": "new_value"}}],
             "options": {{"dry_run": true, "root": "{}"}}
         }}"#,
-        dir.path().display()
+        json_path(&dir)
     );
 
     let output = assert_cmd::cargo_bin_cmd!("ripsed")
@@ -88,7 +93,7 @@ fn no_json_flag_forces_pipe_mode() {
     // Even though this is valid ripsed JSON, --no-json forces pipe mode.
     let request = format!(
         r#"{{"operations": [{{"op": "replace", "find": "x", "replace": "y"}}], "options": {{"root": "{}"}}}}"#,
-        dir.path().display()
+        json_path(&dir)
     );
 
     // With --no-json and find/replace args, it treats the JSON as plain text
@@ -123,7 +128,7 @@ fn json_flag_explicit_forces_json_mode() {
             "operations": [{{"op": "replace", "find": "target_text", "replace": "replaced"}}],
             "options": {{"dry_run": true, "root": "{}"}}
         }}"#,
-        dir.path().display()
+        json_path(&dir)
     );
 
     let output = assert_cmd::cargo_bin_cmd!("ripsed")
@@ -151,7 +156,7 @@ fn json_with_leading_whitespace_detected() {
             "operations": [{{"op": "replace", "find": "hello", "replace": "bye"}}],
             "options": {{"dry_run": true, "root": "{}"}}
         }}"#,
-        dir.path().display()
+        json_path(&dir)
     );
 
     let output = assert_cmd::cargo_bin_cmd!("ripsed")
