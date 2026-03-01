@@ -16,6 +16,7 @@ allow = [
     "Zlib",
 ]
 confidence-threshold = 0.8
+unused-allowed-license = "allow"
 
 [bans]
 multiple-versions = "warn"
