@@ -250,6 +250,36 @@ pub fn build_op_from_cli(cli: &Cli, find: &str) -> Op {
             regex: cli.regex,
             case_insensitive: cli.case_insensitive,
         }
+    } else if let Some(mode) = cli.transform {
+        Op::Transform {
+            find: find.to_string(),
+            mode,
+            regex: cli.regex,
+            case_insensitive: cli.case_insensitive,
+        }
+    } else if let Some(ref parts) = cli.surround {
+        Op::Surround {
+            find: find.to_string(),
+            prefix: parts[0].clone(),
+            suffix: parts[1].clone(),
+            regex: cli.regex,
+            case_insensitive: cli.case_insensitive,
+        }
+    } else if let Some(amount) = cli.indent {
+        Op::Indent {
+            find: find.to_string(),
+            amount,
+            use_tabs: false,
+            regex: cli.regex,
+            case_insensitive: cli.case_insensitive,
+        }
+    } else if let Some(amount) = cli.dedent {
+        Op::Dedent {
+            find: find.to_string(),
+            amount,
+            regex: cli.regex,
+            case_insensitive: cli.case_insensitive,
+        }
     } else {
         Op::Replace {
             find: find.to_string(),

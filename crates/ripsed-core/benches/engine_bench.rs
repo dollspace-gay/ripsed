@@ -1,7 +1,7 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use ripsed_core::engine::apply;
 use ripsed_core::matcher::Matcher;
-use ripsed_core::operation::Op;
+use ripsed_core::operation::{Op, TransformMode};
 
 /// Generate a text buffer with `n` lines, each line being "line NNN: the quick brown fox
 /// jumps over the lazy dog".
@@ -92,11 +92,89 @@ fn bench_case_insensitive_replace(c: &mut Criterion) {
     });
 }
 
+fn bench_transform_upper(c: &mut Criterion) {
+    let text = generate_text(1_000);
+    let op = Op::Transform {
+        find: "fox".to_string(),
+        mode: TransformMode::Upper,
+        regex: false,
+        case_insensitive: false,
+    };
+    let matcher = Matcher::new(&op).unwrap();
+
+    c.bench_function("transform_upper_1000_lines", |b| {
+        b.iter(|| {
+            let result = apply(black_box(&text), &op, &matcher, None, 0).unwrap();
+            black_box(result);
+        });
+    });
+}
+
+fn bench_surround(c: &mut Criterion) {
+    let text = generate_text(1_000);
+    let op = Op::Surround {
+        find: "fox".to_string(),
+        prefix: ">>> ".to_string(),
+        suffix: " <<<".to_string(),
+        regex: false,
+        case_insensitive: false,
+    };
+    let matcher = Matcher::new(&op).unwrap();
+
+    c.bench_function("surround_1000_lines", |b| {
+        b.iter(|| {
+            let result = apply(black_box(&text), &op, &matcher, None, 0).unwrap();
+            black_box(result);
+        });
+    });
+}
+
+fn bench_indent(c: &mut Criterion) {
+    let text = generate_text(1_000);
+    let op = Op::Indent {
+        find: "fox".to_string(),
+        amount: 4,
+        use_tabs: false,
+        regex: false,
+        case_insensitive: false,
+    };
+    let matcher = Matcher::new(&op).unwrap();
+
+    c.bench_function("indent_1000_lines", |b| {
+        b.iter(|| {
+            let result = apply(black_box(&text), &op, &matcher, None, 0).unwrap();
+            black_box(result);
+        });
+    });
+}
+
+fn bench_insert_after(c: &mut Criterion) {
+    let text = generate_text(1_000);
+    let op = Op::InsertAfter {
+        find: "fox".to_string(),
+        content: "// inserted line".to_string(),
+        regex: false,
+        case_insensitive: false,
+    };
+    let matcher = Matcher::new(&op).unwrap();
+
+    c.bench_function("insert_after_1000_lines", |b| {
+        b.iter(|| {
+            let result = apply(black_box(&text), &op, &matcher, None, 0).unwrap();
+            black_box(result);
+        });
+    });
+}
+
 criterion_group!(
     benches,
     bench_simple_replace,
     bench_regex_replace_with_captures,
     bench_delete,
     bench_case_insensitive_replace,
+    bench_transform_upper,
+    bench_surround,
+    bench_indent,
+    bench_insert_after,
 );
 criterion_main!(benches);

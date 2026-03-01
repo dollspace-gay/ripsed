@@ -108,3 +108,25 @@ jobs:
         run: cargo +nightly miri test -p ripsed-core
         env:
           MIRIFLAGS: "-Zmiri-disable-isolation"
+
+  semver:
+    name: semver-checks
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-semver-checks
+        run: cargo install cargo-semver-checks --locked
+
+      - name: Run semver checks
+        run: cargo semver-checks check-release -p ripsed-core --baseline-rev origin/main

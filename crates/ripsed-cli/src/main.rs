@@ -4,6 +4,7 @@ mod human;
 mod interactive;
 pub mod json_mode;
 pub mod pipe_mode;
+pub mod script_mode;
 pub mod shared;
 
 use args::Cli;
@@ -17,6 +18,12 @@ fn main() {
 
     // Load config from --config or auto-discover
     let config = shared::load_config(&cli);
+
+    // Handle --script before other modes
+    if let Some(ref script_path) = cli.script {
+        script_mode::run_script_mode(script_path, &cli, &config);
+        return;
+    }
 
     // Handle --undo-list before anything else
     if cli.undo_list {
