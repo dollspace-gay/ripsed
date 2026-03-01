@@ -1,4 +1,4 @@
-use assert_cmd::Command;
+use assert_cmd;
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
@@ -31,8 +31,7 @@ fn setup_multi_file(files: &[(&str, &str)]) -> TempDir {
 fn simple_replace_modifies_file() {
     let dir = setup_single_file("test.txt", "hello world\nhello again\n");
 
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["hello", "goodbye"])
         .current_dir(dir.path())
         .assert()
@@ -51,8 +50,7 @@ fn regex_replace_with_captures() {
         "fn old_handler() {\n    old_handler();\n}\nfn old_parser() {}\n",
     );
 
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["-e", r"fn\s+old_(\w+)", "fn new_$1", "--glob", "*.rs"])
         .current_dir(dir.path())
         .assert()
@@ -67,8 +65,7 @@ fn regex_replace_with_captures() {
 fn no_matches_exits_with_code_1() {
     let dir = setup_single_file("test.txt", "hello world\n");
 
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["zzz_nonexistent_pattern", "replacement"])
         .current_dir(dir.path())
         .assert()
@@ -81,8 +78,7 @@ fn dry_run_does_not_modify_files() {
     let original = "hello world\nhello again\n";
     let dir = setup_single_file("test.txt", original);
 
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--dry-run", "hello", "goodbye"])
         .current_dir(dir.path())
         .assert()
@@ -96,8 +92,7 @@ fn dry_run_does_not_modify_files() {
 fn dry_run_prints_diff_to_stdout() {
     let dir = setup_single_file("test.txt", "hello world\n");
 
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--dry-run", "hello", "goodbye"])
         .current_dir(dir.path())
         .assert()
@@ -107,8 +102,7 @@ fn dry_run_prints_diff_to_stdout() {
 
 #[test]
 fn pipe_mode_reads_stdin_writes_stdout() {
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["foo", "bar"])
         .write_stdin("foo baz foo\nanother foo line\n")
         .assert()
@@ -119,8 +113,7 @@ fn pipe_mode_reads_stdin_writes_stdout() {
 
 #[test]
 fn pipe_mode_no_matches_outputs_original() {
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["zzz", "yyy"])
         .write_stdin("hello world\n")
         .assert()
@@ -135,8 +128,7 @@ fn delete_lines_removes_matching_lines() {
         "keep this\ndelete this line\nkeep this too\ndelete also\n",
     );
 
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["-d", "delete"])
         .current_dir(dir.path())
         .assert()
@@ -153,8 +145,7 @@ fn delete_lines_removes_matching_lines() {
 fn case_insensitive_replace() {
     let dir = setup_single_file("test.txt", "Hello World\nHELLO WORLD\nhello world\n");
 
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--case-insensitive", "hello", "greetings"])
         .current_dir(dir.path())
         .assert()
@@ -175,8 +166,7 @@ fn glob_filter_only_touches_matching_files() {
         ("data.rs", "old_name\n"),
     ]);
 
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["old_name", "new_name", "--glob", "*.rs"])
         .current_dir(dir.path())
         .assert()
@@ -196,8 +186,7 @@ fn count_mode_prints_number() {
     let dir = setup_single_file("test.txt", "foo bar\nfoo baz\nno match\nfoo end\n");
 
     // Single run: -c outputs the count and modifies the file
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["-c", "foo", "replaced"])
         .current_dir(dir.path())
         .output()
@@ -214,8 +203,7 @@ fn count_mode_prints_number() {
 fn quiet_mode_no_output() {
     let dir = setup_single_file("test.txt", "hello world\n");
 
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["-q", "hello", "goodbye"])
         .current_dir(dir.path())
         .assert()
@@ -231,8 +219,7 @@ fn quiet_mode_no_output() {
 fn backup_mode_creates_bak_file() {
     let dir = setup_single_file("test.txt", "original content\n");
 
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--backup", "original", "modified"])
         .current_dir(dir.path())
         .assert()
@@ -251,8 +238,7 @@ fn backup_mode_creates_bak_file() {
 
 #[test]
 fn pipe_mode_regex_replace() {
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["-e", r"(\d+)", "NUM"])
         .write_stdin("there are 42 cats and 7 dogs\n")
         .assert()
@@ -262,8 +248,7 @@ fn pipe_mode_regex_replace() {
 
 #[test]
 fn pipe_mode_delete_lines() {
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["-d", "remove"])
         .write_stdin("keep\nremove this\nkeep too\nremove also\n")
         .assert()
@@ -273,8 +258,7 @@ fn pipe_mode_delete_lines() {
 
 #[test]
 fn pipe_mode_case_insensitive() {
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--case-insensitive", "FOO", "bar"])
         .write_stdin("Foo is foo and FOO\n")
         .assert()
@@ -286,8 +270,7 @@ fn pipe_mode_case_insensitive() {
 fn replace_preserves_trailing_newline() {
     let dir = setup_single_file("test.txt", "hello\nworld\n");
 
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["hello", "hi"])
         .current_dir(dir.path())
         .assert()
@@ -299,8 +282,7 @@ fn replace_preserves_trailing_newline() {
 
 #[test]
 fn missing_find_pattern_fails() {
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .write_stdin("some input\n")
         .assert()
         .failure();
@@ -308,8 +290,7 @@ fn missing_find_pattern_fails() {
 
 #[test]
 fn insert_after_in_pipe_mode() {
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["marker", "--after", "INSERTED LINE"])
         .write_stdin("before\nmarker line\nafter\n")
         .assert()
@@ -319,8 +300,7 @@ fn insert_after_in_pipe_mode() {
 
 #[test]
 fn insert_before_in_pipe_mode() {
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["marker", "--before", "INSERTED LINE"])
         .write_stdin("before\nmarker line\nafter\n")
         .assert()
@@ -330,8 +310,7 @@ fn insert_before_in_pipe_mode() {
 
 #[test]
 fn replace_line_in_pipe_mode() {
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["old_line", "--replace-line", "completely new line"])
         .write_stdin("keep\nold_line content\nkeep too\n")
         .assert()
@@ -347,8 +326,7 @@ fn multiple_files_in_directory() {
         ("sub/c.txt", "hello from c\n"),
     ]);
 
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["hello", "goodbye"])
         .current_dir(dir.path())
         .assert()
@@ -370,8 +348,7 @@ fn hidden_files_ignored_by_default() {
         (".hidden.txt", "target_text\n"),
     ]);
 
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["target_text", "replaced"])
         .current_dir(dir.path())
         .assert()
@@ -394,8 +371,7 @@ fn hidden_files_included_with_flag() {
         (".hidden.txt", "target_text\n"),
     ]);
 
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--hidden", "target_text", "replaced"])
         .current_dir(dir.path())
         .assert()
@@ -410,8 +386,7 @@ fn hidden_files_included_with_flag() {
 
 #[test]
 fn replace_empty_string_removes_occurrences() {
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["remove_me", ""])
         .write_stdin("keep remove_me keep\n")
         .assert()

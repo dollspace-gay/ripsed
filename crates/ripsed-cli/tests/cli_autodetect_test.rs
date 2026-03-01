@@ -1,4 +1,4 @@
-use assert_cmd::Command;
+use assert_cmd;
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
@@ -32,8 +32,7 @@ fn json_stdin_detected_as_agent_mode() {
         dir.path().display()
     );
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .write_stdin(request)
         .output()
         .unwrap();
@@ -52,8 +51,7 @@ fn json_stdin_detected_as_agent_mode() {
 fn non_json_stdin_uses_pipe_mode() {
     // Plain text piped in should be treated as pipe mode, not JSON mode.
     // We need to provide find/replace args for pipe mode to work.
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["hello", "goodbye"])
         .write_stdin("hello world\n")
         .assert()
@@ -66,8 +64,7 @@ fn json_without_operations_key_uses_pipe_mode() {
     // A JSON object that does NOT have "operations" should fall through
     // to pipe mode (auto-detect sees JSON but not a ripsed request).
     // In pipe mode with no find pattern, it should fail.
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .write_stdin(r#"{"key": "value", "nested": {"data": true}}"#)
         .assert()
         .failure();
@@ -77,8 +74,7 @@ fn json_without_operations_key_uses_pipe_mode() {
 fn json_without_operations_key_pipe_mode_with_args() {
     // JSON without "operations" key piped in, but with find/replace args:
     // should be treated as plain text in pipe mode.
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["key", "KEY"])
         .write_stdin(r#"{"key": "value"}"#)
         .assert()
@@ -98,8 +94,7 @@ fn no_json_flag_forces_pipe_mode() {
 
     // With --no-json and find/replace args, it treats the JSON as plain text
     // and performs a text replacement on the JSON string itself.
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--no-json", "operations", "OPERATIONS"])
         .write_stdin(request)
         .assert()
@@ -112,8 +107,7 @@ fn no_json_flag_without_args_fails() {
     // --no-json forces pipe mode, but no find pattern means failure.
     let request = r#"{"operations": [{"op": "replace", "find": "x", "replace": "y"}]}"#;
 
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--no-json"])
         .write_stdin(request)
         .assert()
@@ -133,8 +127,7 @@ fn json_flag_explicit_forces_json_mode() {
         dir.path().display()
     );
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -162,8 +155,7 @@ fn json_with_leading_whitespace_detected() {
         dir.path().display()
     );
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .write_stdin(request)
         .output()
         .unwrap();
@@ -178,8 +170,7 @@ fn json_with_leading_whitespace_detected() {
 #[test]
 fn plain_text_starting_with_brace_but_invalid_json() {
     // Text that starts with { but is not valid JSON should use pipe mode.
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["hello", "goodbye"])
         .write_stdin("{hello} world\n")
         .assert()

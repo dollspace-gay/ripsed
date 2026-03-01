@@ -1,4 +1,4 @@
-use assert_cmd::Command;
+use assert_cmd;
 use std::fs;
 use tempfile::TempDir;
 
@@ -31,8 +31,7 @@ fn json_single_replace_response_schema() {
         &format!(r#""dry_run": true, "root": "{}""#, dir.path().display()),
     );
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -76,8 +75,7 @@ fn json_batch_operations_with_operation_index() {
         dir.path().display()
     );
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -117,8 +115,7 @@ fn json_dry_run_defaults_to_true() {
         dir.path().display()
     );
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -147,8 +144,7 @@ fn json_dry_run_false_modifies_files() {
         dir.path().display()
     );
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -181,8 +177,7 @@ fn json_invalid_regex_error_response() {
         dir.path().display()
     );
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -208,8 +203,7 @@ fn json_unknown_version_error() {
         "operations": [{"op": "replace", "find": "a", "replace": "b"}]
     }"#;
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -233,8 +227,7 @@ fn json_unknown_version_error() {
 fn json_malformed_request_error() {
     let request = "{ this is not valid json }";
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -255,8 +248,7 @@ fn json_malformed_request_error() {
 fn json_empty_operations_error() {
     let request = r#"{"version": "1", "operations": []}"#;
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -285,8 +277,7 @@ fn json_replace_operation() {
         dir.path().display()
     );
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -311,8 +302,7 @@ fn json_delete_operation() {
         dir.path().display()
     );
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -339,8 +329,7 @@ fn json_insert_after_operation() {
         dir.path().display()
     );
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -367,8 +356,7 @@ fn json_insert_before_operation() {
         dir.path().display()
     );
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -396,8 +384,7 @@ fn json_replace_line_operation() {
         dir.path().display()
     );
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -424,8 +411,7 @@ fn json_response_has_change_details() {
         dir.path().display()
     );
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -467,8 +453,7 @@ fn json_regex_replace() {
         dir.path().display()
     );
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -502,8 +487,7 @@ fn json_per_operation_glob() {
         dir.path().display()
     );
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -538,8 +522,7 @@ fn json_case_insensitive_replace() {
         dir.path().display()
     );
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()

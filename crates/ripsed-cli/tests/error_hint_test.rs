@@ -1,4 +1,4 @@
-use assert_cmd::Command;
+use assert_cmd;
 use std::fs;
 use tempfile::TempDir;
 
@@ -33,8 +33,7 @@ fn invalid_regex_error_has_hint_and_pattern_in_context() {
         dir.path().display()
     );
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -71,8 +70,7 @@ fn invalid_regex_error_has_hint_and_pattern_in_context() {
 fn invalid_request_error_has_hint() {
     let request = r#"{"version": "1", "operations": []}"#;
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -98,8 +96,7 @@ fn invalid_request_error_has_hint() {
 fn malformed_json_error_has_hint() {
     let request = "not json at all {{{";
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -126,8 +123,7 @@ fn malformed_json_error_has_hint() {
 fn unknown_version_error_has_hint_with_supported_versions() {
     let request = r#"{"version": "42", "operations": [{"op": "replace", "find": "a", "replace": "b"}]}"#;
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -166,8 +162,7 @@ fn invalid_regex_error_includes_operation_index() {
         dir.path().display()
     );
 
-    let output = Command::cargo_bin("ripsed")
-        .unwrap()
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
         .write_stdin(request)
         .output()
@@ -192,8 +187,7 @@ fn invalid_regex_error_includes_operation_index() {
 fn no_matches_in_human_mode_prints_to_stderr() {
     let dir = setup_test(&[("test.txt", "hello world\n")]);
 
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["zzz_no_match_pattern_zzz", "replacement"])
         .current_dir(dir.path())
         .assert()
@@ -209,8 +203,7 @@ fn no_matches_in_human_mode_prints_to_stderr() {
 fn invalid_regex_in_human_mode_prints_error() {
     let dir = setup_test(&[("test.txt", "content\n")]);
 
-    Command::cargo_bin("ripsed")
-        .unwrap()
+    assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["-e", "[unclosed", "replacement"])
         .current_dir(dir.path())
         .assert()
@@ -225,8 +218,7 @@ fn all_error_codes_produce_nonempty_hints() {
 
     // 1. invalid_request: empty operations
     {
-        let output = Command::cargo_bin("ripsed")
-            .unwrap()
+        let output = assert_cmd::cargo_bin_cmd!("ripsed")
             .args(["--json"])
             .write_stdin(r#"{"version": "1", "operations": []}"#)
             .output()
@@ -252,8 +244,7 @@ fn all_error_codes_produce_nonempty_hints() {
             dir.path().display()
         );
 
-        let output = Command::cargo_bin("ripsed")
-            .unwrap()
+        let output = assert_cmd::cargo_bin_cmd!("ripsed")
             .args(["--json"])
             .write_stdin(request)
             .output()
@@ -269,8 +260,7 @@ fn all_error_codes_produce_nonempty_hints() {
 
     // 3. invalid_request: malformed JSON
     {
-        let output = Command::cargo_bin("ripsed")
-            .unwrap()
+        let output = assert_cmd::cargo_bin_cmd!("ripsed")
             .args(["--json"])
             .write_stdin("{ broken }")
             .output()
@@ -286,8 +276,7 @@ fn all_error_codes_produce_nonempty_hints() {
 
     // 4. invalid_request: unknown version
     {
-        let output = Command::cargo_bin("ripsed")
-            .unwrap()
+        let output = assert_cmd::cargo_bin_cmd!("ripsed")
             .args(["--json"])
             .write_stdin(r#"{"version": "999", "operations": [{"op": "replace", "find": "a", "replace": "b"}]}"#)
             .output()
