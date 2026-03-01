@@ -112,10 +112,11 @@ jobs:
   semver:
     name: semver-checks
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # Need full history for baseline comparison
+          fetch-depth: 0
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -127,4 +128,4 @@ jobs:
         run: cargo install cargo-semver-checks --locked
 
       - name: Run semver checks
-        run: cargo semver-checks check-release -p ripsed-core
+        run: cargo semver-checks check-release -p ripsed-core --baseline-rev origin/main
