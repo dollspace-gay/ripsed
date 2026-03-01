@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-01
+
+### Added
+- New operation: `--transform` — change case of matched text (upper, lower, title, snake_case, camel_case)
+- New operation: `--surround PREFIX SUFFIX` — wrap matching lines with prefix and suffix
+- New operation: `--indent N` — add N spaces before matching lines
+- New operation: `--dedent N` — remove up to N leading spaces from matching lines
+- `.rip` script files: chain multiple operations in a file, run with `--script path.rip`
+- Script parser with quoted strings, escape sequences, inline comments, and per-operation `--glob` scoping
+- 4 libfuzzer fuzz targets (regex input, JSON request, engine, autodetect)
+- CI: cargo-semver-checks job (advisory) for API compatibility checking
+- Claude Code `/ripsed` skill for AI-assisted bulk find-and-replace
+- 172 new tests (495 total across all crates)
+
+### Changed
+- `Op` and `TransformMode` enums are now `#[non_exhaustive]` for forward-compatible API evolution
+
+### Fixed
+- Two integration tests that ran JSON mode with `dry_run: false` and no `root`, causing ripsed to modify its own source tree during `cargo test`
+
 ## [0.2.0] - 2026-03-01
 
 ### Added
