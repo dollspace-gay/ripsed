@@ -186,8 +186,44 @@ fn gen_schema() {
 }
 
 fn gen_fixtures() {
-    eprintln!("gen-fixtures: not yet implemented (planned for v0.2)");
-    std::process::exit(1);
+    use std::fs;
+    use std::path::Path;
+
+    // Locate the project root (xtask is run from the workspace root by cargo).
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("xtask crate should be inside the workspace");
+    let base = root.join("tests/fixtures/sample-project");
+
+    let files: &[(&str, &[u8])] = &[
+        ("hello.txt", b"Hello, world!\n"),
+        ("src/main.rs", b"fn main() {\n    println!(\"Hello\");\n}\n"),
+        (
+            "src/lib.rs",
+            b"pub fn greet() -> &'static str {\n    \"Hello\"\n}\n",
+        ),
+        (".gitignore", b"target/\n*.log\n"),
+        ("binary.dat", b"\x00\x00\x00\x00\x00"),
+        ("data.log", b"log line 1\nlog line 2\n"),
+    ];
+
+    for (rel_path, contents) in files {
+        let full = base.join(rel_path);
+        if let Some(parent) = full.parent() {
+            fs::create_dir_all(parent).unwrap_or_else(|e| {
+                panic!("failed to create directory {}: {e}", parent.display());
+            });
+        }
+        fs::write(&full, contents).unwrap_or_else(|e| {
+            panic!("failed to write {}: {e}", full.display());
+        });
+    }
+
+    println!(
+        "Generated {} fixture files in {}",
+        files.len(),
+        base.display()
+    );
 }
 
 fn bench() {

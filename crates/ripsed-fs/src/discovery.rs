@@ -11,6 +11,7 @@ pub struct DiscoveryOptions {
     pub gitignore: bool,
     pub hidden: bool,
     pub max_depth: Option<usize>,
+    pub follow_links: bool,
 }
 
 impl DiscoveryOptions {
@@ -26,6 +27,7 @@ impl DiscoveryOptions {
             gitignore: opts.gitignore,
             hidden: opts.hidden,
             max_depth: opts.max_depth,
+            follow_links: false,
         }
     }
 }
@@ -41,7 +43,7 @@ pub fn discover_files(opts: &DiscoveryOptions) -> Vec<PathBuf> {
         .git_global(opts.gitignore)
         .git_exclude(opts.gitignore)
         .hidden(!opts.hidden)
-        .follow_links(false);
+        .follow_links(opts.follow_links);
 
     if let Some(depth) = opts.max_depth {
         builder.max_depth(Some(depth));
@@ -97,7 +99,7 @@ pub fn discover_files_parallel(opts: &DiscoveryOptions) -> Vec<PathBuf> {
         .git_global(opts.gitignore)
         .git_exclude(opts.gitignore)
         .hidden(!opts.hidden)
-        .follow_links(false)
+        .follow_links(opts.follow_links)
         .threads(rayon::current_num_threads().max(2));
 
     if let Some(depth) = opts.max_depth {
@@ -213,6 +215,7 @@ mod tests {
             gitignore: false,
             hidden: false,
             max_depth: None,
+            follow_links: false,
         };
 
         let mut serial = discover_files(&opts);
@@ -235,6 +238,7 @@ mod tests {
             gitignore: false,
             hidden: false,
             max_depth: None,
+            follow_links: false,
         };
 
         let files = discover_files_parallel(&opts);
@@ -252,6 +256,7 @@ mod tests {
             gitignore: false,
             hidden: false,
             max_depth: None,
+            follow_links: false,
         };
 
         // Should not panic and should find all 5 files
@@ -269,6 +274,7 @@ mod tests {
             gitignore: false,
             hidden: false,
             max_depth: None,
+            follow_links: false,
         };
 
         let files = discover_files_auto(&opts, true);
@@ -288,6 +294,7 @@ mod tests {
             gitignore: false,
             hidden: false,
             max_depth: None,
+            follow_links: false,
         };
 
         let files = discover_files_parallel(&opts);
@@ -308,6 +315,7 @@ mod tests {
             gitignore: false,
             hidden: false,
             max_depth: None,
+            follow_links: false,
         };
 
         let files = discover_files_parallel(&opts);

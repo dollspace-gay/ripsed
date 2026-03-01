@@ -19,10 +19,6 @@ pub struct Cli {
     #[arg(short = 'd', long)]
     pub delete: bool,
 
-    /// Modify files in place
-    #[arg(short = 'i', long)]
-    pub in_place: bool,
-
     /// Read from stdin, write to stdout
     #[arg(short = 'p', long)]
     pub pipe: bool,
@@ -110,6 +106,10 @@ pub struct Cli {
     /// Show recent undo log
     #[arg(long)]
     pub undo_list: bool,
+
+    /// Follow symbolic links during file discovery
+    #[arg(long)]
+    pub follow: bool,
 
     /// Path to .ripsed.toml config file
     #[arg(long)]
