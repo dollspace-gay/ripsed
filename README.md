@@ -11,6 +11,7 @@ Designed for humans **and** machines — with first-class JSON support for AI co
 - **Agent-native.** Structured JSON I/O as a first-class interface, not an afterthought.
 - **Safe by default.** Dry-run previews, atomic writes, undo log, backup files.
 - **Fast.** Parallel file discovery, memory-mapped I/O, same philosophy as ripgrep.
+- **Scriptable.** Chain operations in `.rip` script files for multi-step refactors.
 
 ## Installation
 
@@ -39,6 +40,19 @@ ripsed -d 'console\.log'
 
 # Insert text after matching lines
 ripsed 'use serde;' --after 'use serde_json;'
+
+# Transform matched text (upper, lower, title, snake_case, camel_case)
+ripsed --transform upper 'select|from|where' -e
+
+# Surround matching lines with prefix/suffix
+ripsed --surround '/* ' ' */' 'HACK'
+
+# Indent/dedent matching lines
+ripsed --indent 4 'nested_block'
+ripsed --dedent 2 'over_indented'
+
+# Run a multi-step refactor from a .rip script
+ripsed --script refactor.rip
 
 # Preview changes without applying
 ripsed 'foo' 'bar' --dry-run
@@ -77,8 +91,15 @@ OPTIONS:
         --confirm            Interactive confirmation before each change
         --undo [N]           Undo the last N operations (default: 1)
         --undo-list          Show recent undo log entries
+        --follow             Follow symbolic links during discovery
         --config <PATH>      Path to .ripsed.toml config file
+        --transform <MODE>   Transform matched text (upper, lower, title, snake_case, camel_case)
+        --surround <P> <S>   Surround matching lines with prefix and suffix
+        --indent <N>         Indent matching lines by N spaces
+        --dedent <N>         Remove up to N leading spaces from matching lines
+        --script <PATH>      Run operations from a .rip script file
     -j, --json               Enable agent/JSON mode
+        --jsonl              Stream results as JSON Lines
         --no-json            Force human mode even if stdin looks like JSON
 ```
 
@@ -159,6 +180,10 @@ EOF
 | Insert after | `insert_after` | `--after` | Insert text after matching lines |
 | Insert before | `insert_before` | `--before` | Insert text before matching lines |
 | Replace line | `replace_line` | `--replace-line` | Replace entire matching line |
+| Transform | `transform` | `--transform MODE` | Change case of matched text |
+| Surround | `surround` | `--surround P S` | Wrap matching lines with prefix/suffix |
+| Indent | `indent` | `--indent N` | Add N spaces before matching lines |
+| Dedent | `dedent` | `--dedent N` | Remove up to N leading spaces from matching lines |
 
 ### Error Handling
 
@@ -173,6 +198,25 @@ Every error includes a machine-readable `code`, human-readable `message`, and ac
 | `permission_denied` | Can't read/write target files |
 | `binary_file_skipped` | Binary file was skipped |
 | `write_failed` | Could not write output file |
+
+## Script Files
+
+Chain multiple operations in a `.rip` file:
+
+```bash
+# refactor.rip — rename and clean up
+replace "oldApi" "newApi" --glob "*.ts"
+replace "OldApi" "NewApi" --glob "*.ts"
+delete "// DEPRECATED" -e
+transform "select|from|where|join" --mode upper -e --glob "*.sql"
+```
+
+```bash
+ripsed --script refactor.rip --dry-run   # preview
+ripsed --script refactor.rip             # apply
+```
+
+Each line is an operation with the same flags as the CLI. Comments start with `#`. Strings with spaces use quotes (single or double, with escape support).
 
 ## Configuration
 
