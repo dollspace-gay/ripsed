@@ -106,3 +106,5 @@ jobs:
 
       - name: Run Miri
         run: cargo +nightly miri test --workspace
+        env:
+          MIRIFLAGS: "-Zmiri-disable-isolation"
