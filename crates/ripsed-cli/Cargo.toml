@@ -1,0 +1,24 @@
+[package]
+name = "ripsed-cli"
+description = "CLI binary for ripsed"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "ripsed"
+path = "src/main.rs"
+
+[dependencies]
+ripsed-core = { workspace = true }
+ripsed-fs = { workspace = true }
+ripsed-json = { workspace = true }
+clap = { workspace = true }
+anstream = { workspace = true }
+anstyle = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+assert_cmd = { workspace = true }
+predicates = { workspace = true }

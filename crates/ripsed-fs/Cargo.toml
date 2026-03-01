@@ -1,0 +1,17 @@
+[package]
+name = "ripsed-fs"
+description = "File system layer for ripsed — discovery, reading, atomic writes"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ripsed-core = { workspace = true }
+ignore = { workspace = true }
+rayon = { workspace = true }
+memmap2 = { workspace = true }
+tempfile = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
