@@ -46,10 +46,12 @@ fn main() {
         // Attempt JSON/agent mode
         if !stdin_is_tty {
             let mut input = String::new();
-            std::io::stdin().read_to_string(&mut input).unwrap_or_else(|e| {
-                eprintln!("ripsed: failed to read stdin: {e}");
-                process::exit(1);
-            });
+            std::io::stdin()
+                .read_to_string(&mut input)
+                .unwrap_or_else(|e| {
+                    eprintln!("ripsed: failed to read stdin: {e}");
+                    process::exit(1);
+                });
 
             // If stdin was empty and --json wasn't explicitly requested,
             // fall through to file mode (subprocess/test environments often
@@ -183,12 +185,7 @@ fn handle_undo_list(config: &Config) {
 
     let recent = log.recent(20);
     for (i, record) in recent.iter().enumerate() {
-        println!(
-            "  {} {} ({})",
-            i + 1,
-            record.file_path,
-            record.timestamp
-        );
+        println!("  {} {} ({})", i + 1, record.file_path, record.timestamp);
     }
 }
 
@@ -211,7 +208,7 @@ fn run_json_mode(input: &str) {
     let mut results = Vec::new();
     let mut errors = Vec::new();
 
-    for (op_index, (op, _glob)) in ops.iter().enumerate() {
+    for (op_index, (op, op_glob)) in ops.iter().enumerate() {
         let matcher = match Matcher::new(op) {
             Ok(m) => m,
             Err(mut e) => {
@@ -221,7 +218,29 @@ fn run_json_mode(input: &str) {
             }
         };
 
+        // Build a glob matcher for per-operation filtering
+        let glob_matcher = op_glob.as_ref().and_then(|g| {
+            globset::GlobBuilder::new(g)
+                .literal_separator(true)
+                .build()
+                .ok()
+                .map(|glob| glob.compile_matcher())
+        });
+
         for file_path in &files {
+            // Skip files that don't match the per-operation glob
+            if let Some(ref gm) = glob_matcher {
+                if !gm.is_match(file_path) {
+                    // Also try matching just the file name
+                    let matches_name = file_path
+                        .file_name()
+                        .map(|n| gm.is_match(n))
+                        .unwrap_or(false);
+                    if !matches_name {
+                        continue;
+                    }
+                }
+            }
             let content = match reader::read_file(file_path) {
                 Ok(c) => c,
                 Err(_) => continue,
@@ -239,11 +258,8 @@ fn run_json_mode(input: &str) {
                 summary.files_matched += 1;
                 summary.total_replacements += output.changes.len();
 
-                let result = engine::build_op_result(
-                    op_index,
-                    &file_path.to_string_lossy(),
-                    output.changes,
-                );
+                let result =
+                    engine::build_op_result(op_index, &file_path.to_string_lossy(), output.changes);
                 results.push(result);
 
                 if !dry_run {
@@ -295,9 +311,13 @@ fn run_pipe_mode(cli: &Cli, data: &[u8]) {
         }
     };
 
-    match engine::apply(text, &op, &matcher, None, 0) {
+    match engine::apply(text, &op, &matcher, cli.line_range, 0) {
         Ok(output) => {
-            print!("{}", output.text.as_deref().unwrap_or(text));
+            if cli.count {
+                println!("{}", output.changes.len());
+            } else {
+                print!("{}", output.text.as_deref().unwrap_or(text));
+            }
         }
         Err(e) => {
             eprintln!("ripsed: {e}");

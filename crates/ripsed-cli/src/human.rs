@@ -2,10 +2,10 @@ use ripsed_core::diff::Change;
 use std::path::Path;
 
 const BOLD: anstyle::Style = anstyle::Style::new().bold();
-const RED: anstyle::Style = anstyle::Style::new()
-    .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Red)));
-const GREEN: anstyle::Style = anstyle::Style::new()
-    .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Green)));
+const RED: anstyle::Style =
+    anstyle::Style::new().fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Red)));
+const GREEN: anstyle::Style =
+    anstyle::Style::new().fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Green)));
 const RESET: anstyle::Reset = anstyle::Reset;
 
 /// Print a colored diff for a file's changes.
@@ -47,8 +47,6 @@ pub fn print_summary(files_matched: usize, total_changes: usize, dry_run: bool) 
             "ripsed: dry run — {total_changes} change(s) in {files_matched} file(s) (not applied)"
         );
     } else {
-        anstream::eprintln!(
-            "ripsed: {total_changes} change(s) applied in {files_matched} file(s)"
-        );
+        anstream::eprintln!("ripsed: {total_changes} change(s) applied in {files_matched} file(s)");
     }
 }

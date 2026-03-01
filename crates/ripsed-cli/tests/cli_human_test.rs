@@ -1,4 +1,3 @@
-use assert_cmd;
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
@@ -85,7 +84,10 @@ fn dry_run_does_not_modify_files() {
         .success();
 
     let content = fs::read_to_string(dir.path().join("test.txt")).unwrap();
-    assert_eq!(content, original, "File should be unchanged in dry-run mode");
+    assert_eq!(
+        content, original,
+        "File should be unchanged in dry-run mode"
+    );
 }
 
 #[test]
@@ -97,7 +99,9 @@ fn dry_run_prints_diff_to_stdout() {
         .current_dir(dir.path())
         .assert()
         .success()
-        .stdout(predicate::str::contains("hello world").or(predicate::str::contains("goodbye world")));
+        .stdout(
+            predicate::str::contains("hello world").or(predicate::str::contains("goodbye world")),
+        );
 }
 
 #[test]
@@ -176,8 +180,14 @@ fn glob_filter_only_touches_matching_files() {
     let txt_content = fs::read_to_string(dir.path().join("readme.txt")).unwrap();
     let data_content = fs::read_to_string(dir.path().join("data.rs")).unwrap();
 
-    assert!(rs_content.contains("new_name"), "*.rs files should be modified");
-    assert!(data_content.contains("new_name"), "*.rs files should be modified");
+    assert!(
+        rs_content.contains("new_name"),
+        "*.rs files should be modified"
+    );
+    assert!(
+        data_content.contains("new_name"),
+        "*.rs files should be modified"
+    );
     assert_eq!(txt_content, "old_name\n", "*.txt files should be untouched");
 }
 
@@ -194,7 +204,11 @@ fn count_mode_prints_number() {
 
     assert!(output.status.success());
     let count_str = String::from_utf8(output.stdout).unwrap();
-    assert!(predicate::str::is_match(r"^\d+\n$").unwrap().eval(&count_str));
+    assert!(
+        predicate::str::is_match(r"^\d+\n$")
+            .unwrap()
+            .eval(&count_str)
+    );
     let count: usize = count_str.trim().parse().unwrap();
     assert_eq!(count, 3);
 }
@@ -277,7 +291,10 @@ fn replace_preserves_trailing_newline() {
         .success();
 
     let content = fs::read_to_string(dir.path().join("test.txt")).unwrap();
-    assert!(content.ends_with('\n'), "Trailing newline should be preserved");
+    assert!(
+        content.ends_with('\n'),
+        "Trailing newline should be preserved"
+    );
 }
 
 #[test]
@@ -357,7 +374,10 @@ fn hidden_files_ignored_by_default() {
     let visible = fs::read_to_string(dir.path().join("visible.txt")).unwrap();
     let hidden = fs::read_to_string(dir.path().join(".hidden.txt")).unwrap();
 
-    assert!(visible.contains("replaced"), "Visible file should be modified");
+    assert!(
+        visible.contains("replaced"),
+        "Visible file should be modified"
+    );
     assert_eq!(
         hidden, "target_text\n",
         "Hidden file should be untouched by default"
@@ -381,7 +401,10 @@ fn hidden_files_included_with_flag() {
     let hidden = fs::read_to_string(dir.path().join(".hidden.txt")).unwrap();
 
     assert!(visible.contains("replaced"));
-    assert!(hidden.contains("replaced"), "Hidden file should be modified with --hidden");
+    assert!(
+        hidden.contains("replaced"),
+        "Hidden file should be modified with --hidden"
+    );
 }
 
 #[test]

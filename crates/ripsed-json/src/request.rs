@@ -56,10 +56,7 @@ impl JsonRequest {
     fn validate(&self) -> Result<(), RipsedError> {
         if self.version != "1" {
             return Err(RipsedError::invalid_request(
-                format!(
-                    "Unknown version '{}'. Supported versions: 1",
-                    self.version
-                ),
+                format!("Unknown version '{}'. Supported versions: 1", self.version),
                 "Set \"version\": \"1\" in your request.",
             ));
         }
@@ -97,10 +94,7 @@ impl JsonRequest {
                 validate_glob_pattern(glob).map_err(|msg| {
                     RipsedError::invalid_request(
                         format!("Invalid glob in operation {i}: {msg}"),
-                        format!(
-                            "Fix the glob pattern '{}' in operation {i}. {}",
-                            glob, msg
-                        ),
+                        format!("Fix the glob pattern '{}' in operation {i}. {}", glob, msg),
                     )
                 })?;
             }
@@ -121,10 +115,7 @@ impl JsonRequest {
             validate_glob_pattern(ignore).map_err(|msg| {
                 RipsedError::invalid_request(
                     format!("Invalid ignore glob in options: {msg}"),
-                    format!(
-                        "Fix the ignore pattern '{}' in options. {}",
-                        ignore, msg
-                    ),
+                    format!("Fix the ignore pattern '{}' in options. {}", ignore, msg),
                 )
             })?;
         }
@@ -160,9 +151,7 @@ fn validate_op(index: usize, op: &Op) -> Result<(), RipsedError> {
             if find.is_empty() {
                 return Err(RipsedError::invalid_request(
                     format!("Operation {index}: 'find' must not be empty for replace."),
-                    format!(
-                        "Set a non-empty 'find' pattern in operation {index}."
-                    ),
+                    format!("Set a non-empty 'find' pattern in operation {index}."),
                 ));
             }
             // An empty replacement is valid (it deletes the matched text)
@@ -175,9 +164,7 @@ fn validate_op(index: usize, op: &Op) -> Result<(), RipsedError> {
             if find.is_empty() {
                 return Err(RipsedError::invalid_request(
                     format!("Operation {index}: 'find' must not be empty for delete."),
-                    format!(
-                        "Set a non-empty 'find' pattern in operation {index}."
-                    ),
+                    format!("Set a non-empty 'find' pattern in operation {index}."),
                 ));
             }
             if *regex {
@@ -192,19 +179,13 @@ fn validate_op(index: usize, op: &Op) -> Result<(), RipsedError> {
         } => {
             if find.is_empty() {
                 return Err(RipsedError::invalid_request(
-                    format!(
-                        "Operation {index}: 'find' must not be empty for insert_after."
-                    ),
-                    format!(
-                        "Set a non-empty 'find' pattern in operation {index}."
-                    ),
+                    format!("Operation {index}: 'find' must not be empty for insert_after."),
+                    format!("Set a non-empty 'find' pattern in operation {index}."),
                 ));
             }
             if content.is_empty() {
                 return Err(RipsedError::invalid_request(
-                    format!(
-                        "Operation {index}: 'content' must not be empty for insert_after."
-                    ),
+                    format!("Operation {index}: 'content' must not be empty for insert_after."),
                     format!("Set a non-empty 'content' in operation {index}."),
                 ));
             }
@@ -220,19 +201,13 @@ fn validate_op(index: usize, op: &Op) -> Result<(), RipsedError> {
         } => {
             if find.is_empty() {
                 return Err(RipsedError::invalid_request(
-                    format!(
-                        "Operation {index}: 'find' must not be empty for insert_before."
-                    ),
-                    format!(
-                        "Set a non-empty 'find' pattern in operation {index}."
-                    ),
+                    format!("Operation {index}: 'find' must not be empty for insert_before."),
+                    format!("Set a non-empty 'find' pattern in operation {index}."),
                 ));
             }
             if content.is_empty() {
                 return Err(RipsedError::invalid_request(
-                    format!(
-                        "Operation {index}: 'content' must not be empty for insert_before."
-                    ),
+                    format!("Operation {index}: 'content' must not be empty for insert_before."),
                     format!("Set a non-empty 'content' in operation {index}."),
                 ));
             }
@@ -248,19 +223,13 @@ fn validate_op(index: usize, op: &Op) -> Result<(), RipsedError> {
         } => {
             if find.is_empty() {
                 return Err(RipsedError::invalid_request(
-                    format!(
-                        "Operation {index}: 'find' must not be empty for replace_line."
-                    ),
-                    format!(
-                        "Set a non-empty 'find' pattern in operation {index}."
-                    ),
+                    format!("Operation {index}: 'find' must not be empty for replace_line."),
+                    format!("Set a non-empty 'find' pattern in operation {index}."),
                 ));
             }
             if content.is_empty() {
                 return Err(RipsedError::invalid_request(
-                    format!(
-                        "Operation {index}: 'content' must not be empty for replace_line."
-                    ),
+                    format!("Operation {index}: 'content' must not be empty for replace_line."),
                     format!("Set a non-empty 'content' in operation {index}."),
                 ));
             }
@@ -275,9 +244,8 @@ fn validate_op(index: usize, op: &Op) -> Result<(), RipsedError> {
 
 /// Validate that a string compiles as a valid regex.
 fn validate_regex(index: usize, pattern: &str) -> Result<(), RipsedError> {
-    regex::Regex::new(pattern).map_err(|e| {
-        RipsedError::invalid_regex(index, pattern, &e.to_string())
-    })?;
+    regex::Regex::new(pattern)
+        .map_err(|e| RipsedError::invalid_regex(index, pattern, &e.to_string()))?;
     Ok(())
 }
 
@@ -320,14 +288,13 @@ fn validate_glob_pattern(pattern: &str) -> Result<(), String> {
                     }
                 }
                 if !found_close {
-                    return Err(
-                        "Unmatched '{' in glob pattern. Add a closing '}'.".to_string()
-                    );
+                    return Err("Unmatched '{' in glob pattern. Add a closing '}'.".to_string());
                 }
             }
             '}' => {
                 return Err(
-                    "Unmatched '}' in glob pattern. Remove the extra '}' or add an opening '{'.".to_string()
+                    "Unmatched '}' in glob pattern. Remove the extra '}' or add an opening '{'."
+                        .to_string(),
                 );
             }
             _ => {}
@@ -335,9 +302,7 @@ fn validate_glob_pattern(pattern: &str) -> Result<(), String> {
     }
 
     if in_bracket {
-        return Err(
-            "Unmatched '[' in glob pattern. Add a closing ']'.".to_string()
-        );
+        return Err("Unmatched '[' in glob pattern. Add a closing ']'.".to_string());
     }
 
     Ok(())
@@ -374,7 +339,8 @@ mod tests {
 
     #[test]
     fn test_parse_unknown_version() {
-        let input = r#"{"version": "99", "operations": [{"op": "replace", "find": "a", "replace": "b"}]}"#;
+        let input =
+            r#"{"version": "99", "operations": [{"op": "replace", "find": "a", "replace": "b"}]}"#;
         let result = JsonRequest::parse(input);
         assert!(result.is_err());
     }
@@ -431,10 +397,7 @@ mod tests {
             }
             _ => panic!("Expected InsertAfter operation"),
         }
-        assert_eq!(
-            req.operations[0].glob.as_deref(),
-            Some("src/models/*.rs")
-        );
+        assert_eq!(req.operations[0].glob.as_deref(), Some("src/models/*.rs"));
     }
 
     #[test]
@@ -479,8 +442,7 @@ mod tests {
 
     #[test]
     fn test_reject_empty_find_replace() {
-        let input =
-            r#"{"operations": [{"op": "replace", "find": "", "replace": "bar"}]}"#;
+        let input = r#"{"operations": [{"op": "replace", "find": "", "replace": "bar"}]}"#;
         let err = JsonRequest::parse(input).unwrap_err();
         assert!(err.message.contains("'find' must not be empty"));
     }
@@ -540,13 +502,10 @@ mod tests {
 
     #[test]
     fn test_allow_empty_replacement_in_replace() {
-        let input =
-            r#"{"operations": [{"op": "replace", "find": "remove_me", "replace": ""}]}"#;
+        let input = r#"{"operations": [{"op": "replace", "find": "remove_me", "replace": ""}]}"#;
         let req = JsonRequest::parse(input).unwrap();
         match &req.operations[0].op {
-            Op::Replace {
-                find, replace, ..
-            } => {
+            Op::Replace { find, replace, .. } => {
                 assert_eq!(find, "remove_me");
                 assert_eq!(replace, "");
             }
@@ -565,16 +524,14 @@ mod tests {
 
     #[test]
     fn test_reject_invalid_regex_in_delete() {
-        let input =
-            r#"{"operations": [{"op": "delete", "find": "[unclosed", "regex": true}]}"#;
+        let input = r#"{"operations": [{"op": "delete", "find": "[unclosed", "regex": true}]}"#;
         let err = JsonRequest::parse(input).unwrap_err();
         assert_eq!(err.code, ripsed_core::error::ErrorCode::InvalidRegex);
     }
 
     #[test]
     fn test_accept_valid_regex_in_delete() {
-        let input =
-            r#"{"operations": [{"op": "delete", "find": "^\\s*//.*$", "regex": true}]}"#;
+        let input = r#"{"operations": [{"op": "delete", "find": "^\\s*//.*$", "regex": true}]}"#;
         let req = JsonRequest::parse(input).unwrap();
         assert_eq!(req.operations.len(), 1);
     }
@@ -587,10 +544,7 @@ mod tests {
             "operations": [{"op": "replace", "find": "a", "replace": "b", "glob": "**/*.rs"}]
         }"#;
         let req = JsonRequest::parse(input).unwrap();
-        assert_eq!(
-            req.operations[0].glob.as_deref(),
-            Some("**/*.rs")
-        );
+        assert_eq!(req.operations[0].glob.as_deref(), Some("**/*.rs"));
     }
 
     #[test]
@@ -635,10 +589,7 @@ mod tests {
             "operations": [{"op": "replace", "find": "a", "replace": "b", "glob": "*.{rs,toml}"}]
         }"#;
         let req = JsonRequest::parse(input).unwrap();
-        assert_eq!(
-            req.operations[0].glob.as_deref(),
-            Some("*.{rs,toml}")
-        );
+        assert_eq!(req.operations[0].glob.as_deref(), Some("*.{rs,toml}"));
     }
 
     #[test]
@@ -765,9 +716,7 @@ mod tests {
         }"#;
         let req = JsonRequest::parse(input).unwrap();
         match &req.operations[0].op {
-            Op::Replace {
-                find, replace, ..
-            } => {
+            Op::Replace { find, replace, .. } => {
                 assert_eq!(find, "\u{00e9}l\u{00e8}ve");
                 assert_eq!(replace, "\u{00e9}tudiant");
             }
@@ -927,10 +876,7 @@ mod tests {
         let req = JsonRequest::parse(input).unwrap();
         assert_eq!(req.operations.len(), 1);
         assert!(req.options.dry_run);
-        assert_eq!(
-            req.options.root.as_deref(),
-            Some("/home/dev/my-project")
-        );
+        assert_eq!(req.options.root.as_deref(), Some("/home/dev/my-project"));
         let (ops, _) = req.into_ops();
         assert_eq!(ops[0].1.as_deref(), Some("**/*.rs"));
     }
@@ -1006,9 +952,6 @@ mod tests {
         let json = serde_json::to_string(&request).unwrap();
         let parsed = JsonRequest::parse(&json).unwrap();
         assert_eq!(parsed.operations.len(), 1);
-        assert_eq!(
-            parsed.operations[0].glob.as_deref(),
-            Some("**/*.rs")
-        );
+        assert_eq!(parsed.operations[0].glob.as_deref(), Some("**/*.rs"));
     }
 }

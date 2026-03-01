@@ -185,9 +185,7 @@ fn glob_match(pattern: &str, path: &str) -> bool {
         .add_line(None, pattern)
         .ok()
         .and_then(|b| b.build().ok())
-        .is_some_and(|gi| {
-            gi.matched(Path::new(path), false).is_ignore()
-        })
+        .is_some_and(|gi| gi.matched(Path::new(path), false).is_ignore())
 }
 
 #[cfg(test)]

@@ -35,9 +35,9 @@ pub fn create_backup(path: &Path) -> std::io::Result<PathBuf> {
             if !candidate.exists() {
                 break candidate;
             }
-            n = n.checked_add(1).ok_or_else(|| {
-                std::io::Error::other("too many backup files")
-            })?;
+            n = n
+                .checked_add(1)
+                .ok_or_else(|| std::io::Error::other("too many backup files"))?;
         }
     };
 

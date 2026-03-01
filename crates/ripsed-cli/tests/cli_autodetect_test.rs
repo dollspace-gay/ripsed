@@ -1,4 +1,3 @@
-use assert_cmd;
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
@@ -134,8 +133,8 @@ fn json_flag_explicit_forces_json_mode() {
         .unwrap();
 
     let stdout = String::from_utf8(output.stdout).unwrap();
-    let resp: serde_json::Value = serde_json::from_str(&stdout)
-        .expect("--json flag should produce JSON response");
+    let resp: serde_json::Value =
+        serde_json::from_str(&stdout).expect("--json flag should produce JSON response");
 
     assert_eq!(resp["version"], "1");
     assert_eq!(resp["success"], true);

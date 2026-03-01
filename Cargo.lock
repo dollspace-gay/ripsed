@@ -784,6 +784,7 @@ dependencies = [
  "anstyle",
  "assert_cmd",
  "clap",
+ "globset",
  "predicates",
  "ripsed-core",
  "ripsed-fs",
@@ -802,6 +803,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strsim",
+ "tempfile",
  "thiserror",
  "toml",
 ]

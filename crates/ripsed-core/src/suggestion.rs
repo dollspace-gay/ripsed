@@ -58,7 +58,8 @@ mod tests {
 
     #[test]
     fn test_finds_close_match() {
-        let suggestions = find_suggestions("old_fnuction", &["old_function", "new_function", "xyz"]);
+        let suggestions =
+            find_suggestions("old_fnuction", &["old_function", "new_function", "xyz"]);
         assert_eq!(suggestions, vec!["old_function"]);
     }
 

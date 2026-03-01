@@ -1,4 +1,3 @@
-use assert_cmd;
 use std::fs;
 use tempfile::TempDir;
 
@@ -43,14 +42,20 @@ fn invalid_regex_error_has_hint_and_pattern_in_context() {
     let resp: serde_json::Value = serde_json::from_str(&stdout).unwrap();
 
     let errors = resp["errors"].as_array().unwrap();
-    assert!(!errors.is_empty(), "Should produce an error for invalid regex");
+    assert!(
+        !errors.is_empty(),
+        "Should produce an error for invalid regex"
+    );
 
     let error = &errors[0];
     assert_eq!(error["code"], "invalid_regex");
 
     // Hint must be non-empty
     let hint = error["hint"].as_str().unwrap();
-    assert!(!hint.is_empty(), "Hint should be non-empty for invalid_regex");
+    assert!(
+        !hint.is_empty(),
+        "Hint should be non-empty for invalid_regex"
+    );
 
     // Hint should include the pattern
     assert!(
@@ -86,7 +91,10 @@ fn invalid_request_error_has_hint() {
     assert_eq!(error["code"], "invalid_request");
 
     let hint = error["hint"].as_str().unwrap();
-    assert!(!hint.is_empty(), "Hint should be non-empty for invalid_request");
+    assert!(
+        !hint.is_empty(),
+        "Hint should be non-empty for invalid_request"
+    );
 
     let message = error["message"].as_str().unwrap();
     assert!(!message.is_empty(), "Message should be non-empty");
@@ -112,7 +120,10 @@ fn malformed_json_error_has_hint() {
     assert_eq!(error["code"], "invalid_request");
 
     let hint = error["hint"].as_str().unwrap();
-    assert!(!hint.is_empty(), "Hint should be non-empty for malformed JSON");
+    assert!(
+        !hint.is_empty(),
+        "Hint should be non-empty for malformed JSON"
+    );
     assert!(
         hint.contains("JSON") || hint.contains("json") || hint.contains("schema"),
         "Hint should mention JSON format, got: {hint}"
@@ -121,7 +132,8 @@ fn malformed_json_error_has_hint() {
 
 #[test]
 fn unknown_version_error_has_hint_with_supported_versions() {
-    let request = r#"{"version": "42", "operations": [{"op": "replace", "find": "a", "replace": "b"}]}"#;
+    let request =
+        r#"{"version": "42", "operations": [{"op": "replace", "find": "a", "replace": "b"}]}"#;
 
     let output = assert_cmd::cargo_bin_cmd!("ripsed")
         .args(["--json"])
@@ -229,7 +241,10 @@ fn all_error_codes_produce_nonempty_hints() {
         let errors = resp["errors"].as_array().unwrap();
         assert!(!errors.is_empty(), "invalid_request: should have errors");
         let hint = errors[0]["hint"].as_str().unwrap();
-        assert!(!hint.is_empty(), "invalid_request error should have non-empty hint");
+        assert!(
+            !hint.is_empty(),
+            "invalid_request error should have non-empty hint"
+        );
     }
 
     // 2. invalid_regex: bad regex pattern
@@ -255,7 +270,10 @@ fn all_error_codes_produce_nonempty_hints() {
         let errors = resp["errors"].as_array().unwrap();
         assert!(!errors.is_empty(), "invalid_regex: should have errors");
         let hint = errors[0]["hint"].as_str().unwrap();
-        assert!(!hint.is_empty(), "invalid_regex error should have non-empty hint");
+        assert!(
+            !hint.is_empty(),
+            "invalid_regex error should have non-empty hint"
+        );
     }
 
     // 3. invalid_request: malformed JSON
@@ -271,7 +289,10 @@ fn all_error_codes_produce_nonempty_hints() {
         let errors = resp["errors"].as_array().unwrap();
         assert!(!errors.is_empty(), "malformed json: should have errors");
         let hint = errors[0]["hint"].as_str().unwrap();
-        assert!(!hint.is_empty(), "malformed JSON error should have non-empty hint");
+        assert!(
+            !hint.is_empty(),
+            "malformed JSON error should have non-empty hint"
+        );
     }
 
     // 4. invalid_request: unknown version
@@ -287,6 +308,9 @@ fn all_error_codes_produce_nonempty_hints() {
         let errors = resp["errors"].as_array().unwrap();
         assert!(!errors.is_empty(), "unknown version: should have errors");
         let hint = errors[0]["hint"].as_str().unwrap();
-        assert!(!hint.is_empty(), "unknown version error should have non-empty hint");
+        assert!(
+            !hint.is_empty(),
+            "unknown version error should have non-empty hint"
+        );
     }
 }

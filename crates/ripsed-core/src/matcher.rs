@@ -25,9 +25,9 @@ impl Matcher {
             } else {
                 pattern.to_string()
             };
-            Regex::new(&re_pattern).map(Matcher::Regex).map_err(|e| {
-                RipsedError::invalid_regex(0, pattern, &e.to_string())
-            })
+            Regex::new(&re_pattern)
+                .map(Matcher::Regex)
+                .map_err(|e| RipsedError::invalid_regex(0, pattern, &e.to_string()))
         } else {
             Ok(Matcher::Literal {
                 pattern: pattern.to_string(),
@@ -247,7 +247,7 @@ mod tests {
         };
         let m = Matcher::new(&op).unwrap();
         assert!(m.is_match("fn main()"));
-        assert!(!m.is_match("  fn main()"));  // leading whitespace
+        assert!(!m.is_match("  fn main()")); // leading whitespace
         assert!(!m.is_match("fn main() {")); // trailing content
     }
 
@@ -341,7 +341,7 @@ mod tests {
             let result = m.replace(&text, "X");
             assert_eq!(
                 result,
-                Some(format!("before X after")),
+                Some("before X after".to_string()),
                 "Literal mode should replace '{name}' ({pat}) as a literal"
             );
         }

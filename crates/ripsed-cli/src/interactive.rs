@@ -33,11 +33,7 @@ pub fn confirm_change(path: &Path, change: &Change) -> ConfirmAction {
         anstyle::Style::new().fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Green)));
     let reset = anstyle::Reset;
 
-    eprintln!(
-        "{bold}{}{reset} line {}:",
-        path.display(),
-        change.line
-    );
+    eprintln!("{bold}{}{reset} line {}:", path.display(), change.line);
     eprintln!("{red}- {}{reset}", change.before);
     if let Some(ref after) = change.after {
         eprintln!("{green}+ {after}{reset}");

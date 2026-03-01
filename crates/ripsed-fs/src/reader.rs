@@ -38,9 +38,8 @@ pub fn read_file_with_encoding(path: &Path) -> std::io::Result<String> {
     } else {
         &raw[..]
     };
-    String::from_utf8(data.to_vec()).map_err(|e| {
-        std::io::Error::new(std::io::ErrorKind::InvalidData, e)
-    })
+    String::from_utf8(data.to_vec())
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
 }
 
 /// Return a `BufReader` wrapping the given file, suitable for streaming
@@ -61,9 +60,8 @@ fn read_mmap(path: &Path) -> std::io::Result<String> {
     let file = File::open(path)?;
     // SAFETY: We only read the file and don't hold the mapping across modifications.
     let mmap = unsafe { Mmap::map(&file)? };
-    String::from_utf8(mmap.to_vec()).map_err(|e| {
-        std::io::Error::new(std::io::ErrorKind::InvalidData, e)
-    })
+    String::from_utf8(mmap.to_vec())
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
 }
 
 /// Check if a file appears to be binary by looking for null bytes in the
@@ -129,7 +127,7 @@ mod tests {
     fn read_file_with_encoding_rejects_invalid_utf8() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("bad.txt");
-        fs::write(&path, &[0xFF, 0xFE, 0x80]).unwrap();
+        fs::write(&path, [0xFF, 0xFE, 0x80]).unwrap();
 
         assert!(read_file_with_encoding(&path).is_err());
     }

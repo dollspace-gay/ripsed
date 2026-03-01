@@ -142,9 +142,7 @@ fn parse_line_range(s: &str) -> Result<LineRange, String> {
                 return Err("line range end must be >= 1".to_string());
             }
             if start > end {
-                return Err(format!(
-                    "line range start ({start}) must be <= end ({end})"
-                ));
+                return Err(format!("line range start ({start}) must be <= end ({end})"));
             }
             Ok(LineRange {
                 start,
@@ -165,9 +163,7 @@ fn parse_line_range(s: &str) -> Result<LineRange, String> {
 
 /// Value parser for `--max-depth` that rejects 0.
 fn parse_max_depth(s: &str) -> Result<usize, String> {
-    let val: usize = s
-        .parse()
-        .map_err(|_| format!("invalid max-depth: '{s}'"))?;
+    let val: usize = s.parse().map_err(|_| format!("invalid max-depth: '{s}'"))?;
     if val == 0 {
         return Err("max-depth must be >= 1".to_string());
     }

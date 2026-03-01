@@ -50,9 +50,7 @@ pub fn apply(
         }
 
         match op {
-            Op::Replace {
-                replace, ..
-            } => {
+            Op::Replace { replace, .. } => {
                 if let Some(replaced) = matcher.replace(line, replace) {
                     let ctx = build_context(&lines, idx, context_lines);
                     changes.push(Change {
@@ -389,17 +387,14 @@ mod tests {
     fn test_unicode_cjk() {
         let text = "\u{4F60}\u{597D}\u{4E16}\u{754C}\n"; // "hello world" in Chinese
         let op = Op::Replace {
-            find: "\u{4E16}\u{754C}".to_string(), // "world"
+            find: "\u{4E16}\u{754C}".to_string(),    // "world"
             replace: "\u{5730}\u{7403}".to_string(), // "earth"
             regex: false,
             case_insensitive: false,
         };
         let matcher = Matcher::new(&op).unwrap();
         let result = apply(text, &op, &matcher, None, 0).unwrap();
-        assert_eq!(
-            result.text.unwrap(),
-            "\u{4F60}\u{597D}\u{5730}\u{7403}\n"
-        );
+        assert_eq!(result.text.unwrap(), "\u{4F60}\u{597D}\u{5730}\u{7403}\n");
     }
 
     #[test]
@@ -528,8 +523,7 @@ mod proptests {
 
     /// Strategy for generating text that is multiple lines with a trailing newline.
     fn arb_multiline_text() -> impl Strategy<Value = String> {
-        prop::collection::vec("[^\n\r]{0,80}", 1..10)
-            .prop_map(|lines| lines.join("\n") + "\n")
+        prop::collection::vec("[^\n\r]{0,80}", 1..10).prop_map(|lines| lines.join("\n") + "\n")
     }
 
     /// Strategy for generating a non-empty find pattern (plain literal).

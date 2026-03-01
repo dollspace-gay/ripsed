@@ -31,6 +31,7 @@ toml = "0.8"
 strsim = "0.11"
 
 # File system
+globset = "0.4"
 ignore = "0.4"
 rayon = "1"
 memmap2 = "0.9"

@@ -1,4 +1,3 @@
-use assert_cmd;
 use std::fs;
 use tempfile::TempDir;
 
@@ -17,9 +16,7 @@ fn setup_json_test(files: &[(&str, &str)]) -> TempDir {
 
 /// Helper: build a JSON request string from parts.
 fn json_request(operations: &str, options: &str) -> String {
-    format!(
-        r#"{{"version": "1", "operations": [{operations}], "options": {{{options}}}}}"#
-    )
+    format!(r#"{{"version": "1", "operations": [{operations}], "options": {{{options}}}}}"#)
 }
 
 #[test]
@@ -124,11 +121,17 @@ fn json_dry_run_defaults_to_true() {
     let stdout = String::from_utf8(output.stdout).unwrap();
     let resp: serde_json::Value = serde_json::from_str(&stdout).unwrap();
 
-    assert_eq!(resp["dry_run"], true, "Agent mode should default to dry_run: true");
+    assert_eq!(
+        resp["dry_run"], true,
+        "Agent mode should default to dry_run: true"
+    );
 
     // File should NOT be modified
     let content = fs::read_to_string(dir.path().join("test.txt")).unwrap();
-    assert_eq!(content, "original text\n", "File should be unchanged when dry_run defaults to true");
+    assert_eq!(
+        content, "original text\n",
+        "File should be unchanged when dry_run defaults to true"
+    );
 }
 
 #[test]
@@ -160,8 +163,14 @@ fn json_dry_run_false_modifies_files() {
 
     // File should actually be modified
     let content = fs::read_to_string(dir.path().join("test.txt")).unwrap();
-    assert!(content.contains("modified text"), "File should be modified when dry_run is false");
-    assert!(!content.contains("original"), "Original text should be gone");
+    assert!(
+        content.contains("modified text"),
+        "File should be modified when dry_run is false"
+    );
+    assert!(
+        !content.contains("original"),
+        "Original text should be gone"
+    );
 }
 
 #[test]
@@ -192,8 +201,14 @@ fn json_invalid_regex_error_response() {
 
     let error = &errors[0];
     assert_eq!(error["code"], "invalid_regex");
-    assert!(!error["hint"].as_str().unwrap().is_empty(), "Error hint should be non-empty");
-    assert!(!error["message"].as_str().unwrap().is_empty(), "Error message should be non-empty");
+    assert!(
+        !error["hint"].as_str().unwrap().is_empty(),
+        "Error hint should be non-empty"
+    );
+    assert!(
+        !error["message"].as_str().unwrap().is_empty(),
+        "Error message should be non-empty"
+    );
 }
 
 #[test]
@@ -220,7 +235,10 @@ fn json_unknown_version_error() {
     assert_eq!(errors[0]["code"], "invalid_request");
     // The message should mention the version
     let msg = errors[0]["message"].as_str().unwrap();
-    assert!(msg.contains("99") || msg.contains("version"), "Error should mention the bad version");
+    assert!(
+        msg.contains("99") || msg.contains("version"),
+        "Error should mention the bad version"
+    );
 }
 
 #[test]
@@ -340,7 +358,11 @@ fn json_insert_after_operation() {
     let content = fs::read_to_string(dir.path().join("data.txt")).unwrap();
     let lines: Vec<&str> = content.lines().collect();
     let marker_idx = lines.iter().position(|l| l.contains("marker")).unwrap();
-    assert_eq!(lines[marker_idx + 1], "INSERTED", "INSERTED should follow the marker line");
+    assert_eq!(
+        lines[marker_idx + 1],
+        "INSERTED",
+        "INSERTED should follow the marker line"
+    );
 }
 
 #[test]
@@ -368,7 +390,11 @@ fn json_insert_before_operation() {
     let lines: Vec<&str> = content.lines().collect();
     let marker_idx = lines.iter().position(|l| l.contains("marker")).unwrap();
     assert!(marker_idx > 0);
-    assert_eq!(lines[marker_idx - 1], "INSERTED", "INSERTED should precede the marker line");
+    assert_eq!(
+        lines[marker_idx - 1],
+        "INSERTED",
+        "INSERTED should precede the marker line"
+    );
 }
 
 #[test]

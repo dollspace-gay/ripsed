@@ -83,9 +83,7 @@ impl Drop for FileLock {
 fn lock_path_for(path: &Path) -> PathBuf {
     path.with_extension(format!(
         "{}.ripsed.lock",
-        path.extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
+        path.extension().and_then(|e| e.to_str()).unwrap_or("")
     ))
 }
 
