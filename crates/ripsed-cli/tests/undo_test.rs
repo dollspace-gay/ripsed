@@ -3,7 +3,6 @@ use std::fs;
 use tempfile::TempDir;
 
 /// Escape a path for safe embedding in a JSON string (handles Windows backslashes).
-#[allow(dead_code)]
 fn json_path(dir: &TempDir) -> String {
     dir.path().display().to_string().replace('\\', "\\\\")
 }
@@ -188,5 +187,124 @@ fn undo_after_multiple_separate_operations() {
     assert_eq!(
         fs::read_to_string(dir.path().join("test.txt")).unwrap(),
         "aaa bbb ccc\n"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// JSON mode undo tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn json_undo_restores_file_after_replacement() {
+    let dir = setup_test(&[("test.txt", "hello world\n")]);
+
+    // Apply replacement via JSON mode (dry_run: false)
+    let request = format!(
+        r#"{{
+            "version": "1",
+            "operations": [{{"op": "replace", "find": "hello", "replace": "goodbye"}}],
+            "options": {{"dry_run": false, "root": "{}"}}
+        }}"#,
+        json_path(&dir)
+    );
+
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["--json"])
+        .write_stdin(request)
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    // Verify the file was changed
+    let content = fs::read_to_string(dir.path().join("test.txt")).unwrap();
+    assert_eq!(content, "goodbye world\n");
+
+    // Undo via JSON mode
+    let undo_request = r#"{"undo": {"last": 1}}"#;
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["--json"])
+        .write_stdin(undo_request)
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    // Verify undo response schema
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let resp: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(resp["version"], "1");
+    assert_eq!(resp["success"], true);
+    assert_eq!(resp["undo"]["operations_reverted"], 1);
+    assert_eq!(resp["undo"]["files_restored"], 1);
+
+    // Verify the file is restored
+    let content = fs::read_to_string(dir.path().join("test.txt")).unwrap();
+    assert_eq!(content, "hello world\n");
+}
+
+#[test]
+fn json_undo_on_empty_log_reverts_zero() {
+    let dir = setup_test(&[("test.txt", "content\n")]);
+
+    let undo_request = r#"{"undo": {"last": 1}}"#;
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["--json"])
+        .write_stdin(undo_request)
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let resp: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(resp["undo"]["operations_reverted"], 0);
+    assert_eq!(resp["undo"]["files_restored"], 0);
+}
+
+#[test]
+fn json_undo_multiple_with_count() {
+    let dir = setup_test(&[("a.txt", "alpha content\n"), ("b.txt", "alpha content\n")]);
+
+    // Replace alpha -> beta via JSON (affects both files)
+    let request = format!(
+        r#"{{
+            "version": "1",
+            "operations": [{{"op": "replace", "find": "alpha", "replace": "beta"}}],
+            "options": {{"dry_run": false, "root": "{}"}}
+        }}"#,
+        json_path(&dir)
+    );
+
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["--json"])
+        .write_stdin(request)
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    // Undo with count=2 to restore both files
+    let undo_request = r#"{"undo": {"last": 2}}"#;
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["--json"])
+        .write_stdin(undo_request)
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let resp: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(resp["undo"]["files_restored"], 2);
+
+    // Verify both files are restored
+    assert_eq!(
+        fs::read_to_string(dir.path().join("a.txt")).unwrap(),
+        "alpha content\n"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("b.txt")).unwrap(),
+        "alpha content\n"
     );
 }

@@ -2,7 +2,6 @@ use std::fs;
 use tempfile::TempDir;
 
 /// Escape a path for safe embedding in a JSON string (handles Windows backslashes).
-#[allow(dead_code)]
 fn json_path(dir: &TempDir) -> String {
     dir.path().display().to_string().replace('\\', "\\\\")
 }
@@ -159,6 +158,130 @@ fn gitignore_with_directory_pattern() {
     );
 
     // build/output.txt should be untouched (entire build/ directory is ignored)
+    let build_content = fs::read_to_string(dir.path().join("build/output.txt")).unwrap();
+    assert_eq!(
+        build_content, "target_word in build\n",
+        "build/ directory should be untouched because it is gitignored"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// JSON mode gitignore tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn json_gitignore_excludes_matching_files() {
+    let dir = setup_test(&[
+        ("readme.txt", "target_word in readme\n"),
+        ("debug.log", "target_word in log\n"),
+        (".gitignore", "*.log\n"),
+    ]);
+    git_init(&dir);
+
+    let request = format!(
+        r#"{{
+            "version": "1",
+            "operations": [{{"op": "replace", "find": "target_word", "replace": "replaced"}}],
+            "options": {{"dry_run": false, "root": "{}"}}
+        }}"#,
+        json_path(&dir)
+    );
+
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["--json"])
+        .write_stdin(request)
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    // .txt file should be modified
+    let txt_content = fs::read_to_string(dir.path().join("readme.txt")).unwrap();
+    assert!(
+        txt_content.contains("replaced"),
+        "readme.txt should be modified"
+    );
+
+    // .log file should be untouched (gitignored)
+    let log_content = fs::read_to_string(dir.path().join("debug.log")).unwrap();
+    assert_eq!(
+        log_content, "target_word in log\n",
+        ".log file should be untouched because it is gitignored"
+    );
+}
+
+#[test]
+fn json_gitignore_false_includes_ignored_files() {
+    let dir = setup_test(&[
+        ("readme.txt", "target_word in readme\n"),
+        ("debug.log", "target_word in log\n"),
+        (".gitignore", "*.log\n"),
+    ]);
+    git_init(&dir);
+
+    let request = format!(
+        r#"{{
+            "version": "1",
+            "operations": [{{"op": "replace", "find": "target_word", "replace": "replaced"}}],
+            "options": {{"dry_run": false, "gitignore": false, "root": "{}"}}
+        }}"#,
+        json_path(&dir)
+    );
+
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["--json"])
+        .write_stdin(request)
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    // Both files should be modified
+    let txt_content = fs::read_to_string(dir.path().join("readme.txt")).unwrap();
+    assert!(
+        txt_content.contains("replaced"),
+        "readme.txt should be modified"
+    );
+
+    let log_content = fs::read_to_string(dir.path().join("debug.log")).unwrap();
+    assert!(
+        log_content.contains("replaced"),
+        ".log file should be modified with gitignore: false"
+    );
+}
+
+#[test]
+fn json_gitignore_respects_directory_pattern() {
+    let dir = setup_test(&[
+        ("src/main.txt", "target_word in src\n"),
+        ("build/output.txt", "target_word in build\n"),
+        (".gitignore", "build/\n"),
+    ]);
+    git_init(&dir);
+
+    let request = format!(
+        r#"{{
+            "version": "1",
+            "operations": [{{"op": "replace", "find": "target_word", "replace": "replaced"}}],
+            "options": {{"dry_run": false, "root": "{}"}}
+        }}"#,
+        json_path(&dir)
+    );
+
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["--json"])
+        .write_stdin(request)
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let src_content = fs::read_to_string(dir.path().join("src/main.txt")).unwrap();
+    assert!(
+        src_content.contains("replaced"),
+        "src/main.txt should be modified"
+    );
+
     let build_content = fs::read_to_string(dir.path().join("build/output.txt")).unwrap();
     assert_eq!(
         build_content, "target_word in build\n",
