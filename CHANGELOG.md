@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.0] - 2026-03-01
 
 ### Added
+- Add missing JSON mode tests for undo, config, gitignore, and atomic write test files (#20)
 - New operation: `--transform` — change case of matched text (upper, lower, title, snake_case, camel_case)
 - New operation: `--surround PREFIX SUFFIX` — wrap matching lines with prefix and suffix
 - New operation: `--indent N` — add N spaces before matching lines

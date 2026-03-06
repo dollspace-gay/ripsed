@@ -2,7 +2,6 @@ use std::fs;
 use tempfile::TempDir;
 
 /// Escape a path for safe embedding in a JSON string (handles Windows backslashes).
-#[allow(dead_code)]
 fn json_path(dir: &TempDir) -> String {
     dir.path().display().to_string().replace('\\', "\\\\")
 }
@@ -181,4 +180,110 @@ fn missing_config_file_via_flag_exits_with_error() {
         .current_dir(dir.path())
         .assert()
         .failure();
+}
+
+// ---------------------------------------------------------------------------
+// JSON mode config tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn json_mode_backup_option_creates_bak_file() {
+    let dir = setup_test(&[("test.txt", "original content\n")]);
+
+    let request = format!(
+        r#"{{
+            "version": "1",
+            "operations": [{{"op": "replace", "find": "original", "replace": "modified"}}],
+            "options": {{"dry_run": false, "backup": true, "root": "{}"}}
+        }}"#,
+        json_path(&dir)
+    );
+
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["--json"])
+        .write_stdin(request)
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    // File should be modified
+    let content = fs::read_to_string(dir.path().join("test.txt")).unwrap();
+    assert!(
+        content.contains("modified"),
+        "File should contain the replacement"
+    );
+
+    // Backup file should exist with original content
+    let backup_path = dir.path().join("test.txt.ripsed.bak");
+    assert!(
+        backup_path.exists(),
+        "Backup .bak file should exist when backup: true in JSON options"
+    );
+    let backup_content = fs::read_to_string(&backup_path).unwrap();
+    assert_eq!(backup_content, "original content\n");
+}
+
+#[test]
+fn json_mode_without_backup_option_does_not_create_bak() {
+    let dir = setup_test(&[("test.txt", "original content\n")]);
+
+    let request = format!(
+        r#"{{
+            "version": "1",
+            "operations": [{{"op": "replace", "find": "original", "replace": "modified"}}],
+            "options": {{"dry_run": false, "backup": false, "root": "{}"}}
+        }}"#,
+        json_path(&dir)
+    );
+
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["--json"])
+        .write_stdin(request)
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let content = fs::read_to_string(dir.path().join("test.txt")).unwrap();
+    assert!(content.contains("modified"));
+
+    let backup_path = dir.path().join("test.txt.ripsed.bak");
+    assert!(
+        !backup_path.exists(),
+        "No backup should be created when backup: false"
+    );
+}
+
+#[test]
+fn json_mode_dry_run_true_does_not_modify_file() {
+    let dir = setup_test(&[("test.txt", "original content\n")]);
+
+    // dry_run defaults to true in JSON mode
+    let request = format!(
+        r#"{{
+            "version": "1",
+            "operations": [{{"op": "replace", "find": "original", "replace": "modified"}}],
+            "options": {{"root": "{}"}}
+        }}"#,
+        json_path(&dir)
+    );
+
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["--json"])
+        .write_stdin(request)
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let content = fs::read_to_string(dir.path().join("test.txt")).unwrap();
+    assert_eq!(
+        content, "original content\n",
+        "File should be unchanged when dry_run defaults to true"
+    );
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let resp: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(resp["dry_run"], true);
 }

@@ -2,7 +2,6 @@ use std::fs;
 use tempfile::TempDir;
 
 /// Escape a path for safe embedding in a JSON string (handles Windows backslashes).
-#[allow(dead_code)]
 fn json_path(dir: &TempDir) -> String {
     dir.path().display().to_string().replace('\\', "\\\\")
 }
@@ -226,6 +225,153 @@ fn backup_across_multiple_files() {
     );
 
     // Both backups should exist
+    let bak1 = dir.path().join("first.txt.ripsed.bak");
+    let bak2 = dir.path().join("second.txt.ripsed.bak");
+    assert!(bak1.exists(), "Backup for first.txt should exist");
+    assert!(bak2.exists(), "Backup for second.txt should exist");
+
+    assert_eq!(fs::read_to_string(&bak1).unwrap(), "common_word here\n");
+    assert_eq!(fs::read_to_string(&bak2).unwrap(), "common_word there\n");
+}
+
+// ---------------------------------------------------------------------------
+// JSON mode atomic write / backup tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn json_backup_creates_bak_file() {
+    let dir = setup_test(&[("data.txt", "original content\n")]);
+
+    let request = format!(
+        r#"{{
+            "version": "1",
+            "operations": [{{"op": "replace", "find": "original", "replace": "modified"}}],
+            "options": {{"dry_run": false, "backup": true, "root": "{}"}}
+        }}"#,
+        json_path(&dir)
+    );
+
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["--json"])
+        .write_stdin(request)
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let content = fs::read_to_string(dir.path().join("data.txt")).unwrap();
+    assert!(
+        content.contains("modified content"),
+        "File should be modified"
+    );
+
+    let backup_path = dir.path().join("data.txt.ripsed.bak");
+    assert!(backup_path.exists(), "Backup .bak file should exist");
+    assert_eq!(
+        fs::read_to_string(&backup_path).unwrap(),
+        "original content\n"
+    );
+}
+
+#[test]
+fn json_dry_run_does_not_create_backup() {
+    let dir = setup_test(&[("test.txt", "original content\n")]);
+
+    let request = format!(
+        r#"{{
+            "version": "1",
+            "operations": [{{"op": "replace", "find": "original", "replace": "modified"}}],
+            "options": {{"dry_run": true, "backup": true, "root": "{}"}}
+        }}"#,
+        json_path(&dir)
+    );
+
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["--json"])
+        .write_stdin(request)
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let content = fs::read_to_string(dir.path().join("test.txt")).unwrap();
+    assert_eq!(
+        content, "original content\n",
+        "File should be unchanged in dry-run"
+    );
+
+    let backup_path = dir.path().join("test.txt.ripsed.bak");
+    assert!(
+        !backup_path.exists(),
+        "No backup should be created in dry-run mode"
+    );
+}
+
+#[test]
+fn json_atomic_batch_writes_all_files() {
+    let dir = setup_test(&[
+        ("first.txt", "common_word here\n"),
+        ("second.txt", "common_word there\n"),
+    ]);
+
+    let request = format!(
+        r#"{{
+            "version": "1",
+            "operations": [{{"op": "replace", "find": "common_word", "replace": "replaced_word"}}],
+            "options": {{"dry_run": false, "atomic": true, "root": "{}"}}
+        }}"#,
+        json_path(&dir)
+    );
+
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["--json"])
+        .write_stdin(request)
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let resp: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(resp["success"], true);
+
+    // Both files should be modified
+    assert!(
+        fs::read_to_string(dir.path().join("first.txt"))
+            .unwrap()
+            .contains("replaced_word")
+    );
+    assert!(
+        fs::read_to_string(dir.path().join("second.txt"))
+            .unwrap()
+            .contains("replaced_word")
+    );
+}
+
+#[test]
+fn json_backup_across_multiple_files() {
+    let dir = setup_test(&[
+        ("first.txt", "common_word here\n"),
+        ("second.txt", "common_word there\n"),
+    ]);
+
+    let request = format!(
+        r#"{{
+            "version": "1",
+            "operations": [{{"op": "replace", "find": "common_word", "replace": "replaced_word"}}],
+            "options": {{"dry_run": false, "backup": true, "root": "{}"}}
+        }}"#,
+        json_path(&dir)
+    );
+
+    let output = assert_cmd::cargo_bin_cmd!("ripsed")
+        .args(["--json"])
+        .write_stdin(request)
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+
     let bak1 = dir.path().join("first.txt.ripsed.bak");
     let bak2 = dir.path().join("second.txt.ripsed.bak");
     assert!(bak1.exists(), "Backup for first.txt should exist");

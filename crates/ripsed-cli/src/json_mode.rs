@@ -32,6 +32,7 @@ pub fn run_json_mode(input: &str, config: &Config, jsonl: bool) {
 
     let dry_run = request.options.dry_run;
     let atomic = request.options.atomic;
+    let backup = request.options.backup;
     let (ops, options) = request.into_ops();
     let discovery_opts = DiscoveryOptions::from_op_options(&options);
     let files = discover_files(&discovery_opts);
@@ -131,6 +132,10 @@ pub fn run_json_mode(input: &str, config: &Config, jsonl: bool) {
                                     entry: undo_entry.clone(),
                                 });
                             }
+                        }
+
+                        if backup {
+                            let _ = writer::create_backup(file_path);
                         }
 
                         if atomic {
