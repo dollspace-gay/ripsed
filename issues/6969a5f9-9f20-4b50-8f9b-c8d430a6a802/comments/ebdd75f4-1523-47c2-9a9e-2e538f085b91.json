@@ -1,0 +1,8 @@
+{
+  "uuid": "ebdd75f4-1523-47c2-9a9e-2e538f085b91",
+  "issue_uuid": "6969a5f9-9f20-4b50-8f9b-c8d430a6a802",
+  "author": "anon-59ff128d",
+  "content": "Decision: Using backup-before-rename approach. Before the commit phase, read each destination file's current content. If any persist() fails mid-commit, restore already-persisted files from saved originals. This gives true all-or-nothing semantics. Alternative was documenting as best-effort, but since --atomic is user-facing and the design doc promises transactional writes, we need the real guarantee.",
+  "created_at": "2026-03-26T00:11:52.890814791Z",
+  "kind": "decision"
+}
