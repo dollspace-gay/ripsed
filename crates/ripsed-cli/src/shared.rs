@@ -1,5 +1,6 @@
 use ripsed_core::config::Config;
-use ripsed_core::undo::UndoLog;
+use ripsed_core::operation::OpOptions;
+use ripsed_core::undo::{UndoEntry, UndoLog, UndoRecord};
 use std::path::{Path, PathBuf};
 
 use crate::args::Cli;
@@ -45,10 +46,56 @@ pub fn load_undo_log(config: &Config) -> UndoLog {
     }
 }
 
-/// Save the undo log to disk.
+/// Record an undo entry in the log for a given file path.
+pub fn record_undo(log: &mut UndoLog, file_path: &Path, entry: &UndoEntry) {
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| format!("{}", d.as_secs()))
+        .unwrap_or_else(|_| "0".to_string());
+
+    log.push(UndoRecord {
+        timestamp,
+        file_path: file_path.to_string_lossy().to_string(),
+        entry: entry.clone(),
+    });
+}
+
+/// Build OpOptions from CLI args and config, consolidating the shared logic
+/// used by file_mode and script_mode.
+pub fn build_op_options(cli: &Cli, config: &Config, glob: Option<String>) -> OpOptions {
+    OpOptions {
+        dry_run: cli.dry_run,
+        root: None,
+        gitignore: if cli.no_gitignore {
+            false
+        } else {
+            config.defaults.gitignore
+        },
+        backup: cli.backup || config.defaults.backup,
+        atomic: false,
+        glob,
+        ignore: cli.ignore_pattern.clone(),
+        hidden: cli.hidden,
+        max_depth: cli.max_depth.or(config.defaults.max_depth),
+        line_range: cli.line_range,
+    }
+}
+
+/// Save the undo log to disk. Warns on stderr if the write fails.
 pub fn save_undo_log(log: &UndoLog) {
     let dir = undo_dir();
-    let _ = std::fs::create_dir_all(&dir);
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        eprintln!(
+            "ripsed: warning: cannot create undo directory {}: {e}",
+            dir.display()
+        );
+        return;
+    }
     let path = undo_log_path();
-    let _ = std::fs::write(&path, log.to_jsonl());
+    if let Err(e) = std::fs::write(&path, log.to_jsonl()) {
+        eprintln!(
+            "ripsed: warning: cannot save undo log to {}: {e}",
+            path.display()
+        );
+    }
 }

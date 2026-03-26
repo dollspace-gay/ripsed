@@ -2,7 +2,6 @@ use ripsed_core::config::Config;
 use ripsed_core::diff::Summary;
 use ripsed_core::engine;
 use ripsed_core::matcher::Matcher;
-use ripsed_core::undo::UndoRecord;
 use ripsed_fs::discovery::{DiscoveryOptions, discover_files};
 use ripsed_fs::reader;
 use ripsed_fs::writer;
@@ -10,24 +9,23 @@ use ripsed_json::request::JsonRequest;
 use ripsed_json::response::{JsonResponse, UndoResponse, UndoSummary};
 use std::io::Write;
 use std::path::Path;
-use std::process;
 
-use crate::shared::{load_undo_log, save_undo_log};
+use crate::shared::{load_undo_log, record_undo, save_undo_log};
 
-pub fn run_json_mode(input: &str, config: &Config, jsonl: bool) {
+pub fn run_json_mode(input: &str, config: &Config, jsonl: bool) -> Result<(), i32> {
     let request = match JsonRequest::parse(input) {
         Ok(r) => r,
         Err(e) => {
             let response = JsonResponse::error(vec![e]);
             println!("{}", response.to_json());
-            process::exit(1);
+            return Err(1);
         }
     };
 
     // Handle undo requests before processing operations
     if let Some(ref undo_req) = request.undo {
         handle_json_undo(undo_req.last, config);
-        return;
+        return Ok(());
     }
 
     let dry_run = request.options.dry_run;
@@ -88,7 +86,20 @@ pub fn run_json_mode(input: &str, config: &Config, jsonl: bool) {
             }
             let content = match reader::read_file(file_path) {
                 Ok(c) => c,
-                Err(_) => continue,
+                Err(e) => {
+                    let path_str = file_path.to_string_lossy();
+                    if e.kind() == std::io::ErrorKind::PermissionDenied {
+                        errors.push(ripsed_core::error::RipsedError::permission_denied(
+                            &path_str,
+                        ));
+                    } else {
+                        errors.push(ripsed_core::error::RipsedError::write_failed(
+                            &path_str,
+                            &e.to_string(),
+                        ));
+                    }
+                    continue;
+                }
             };
 
             let output = match engine::apply(&content, op, &matcher, options.line_range, 3) {
@@ -120,17 +131,8 @@ pub fn run_json_mode(input: &str, config: &Config, jsonl: bool) {
                     if let Some(ref text) = output.text {
                         // Record undo entry before writing
                         if let Some(ref mut log) = undo_log {
-                            let now = std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .map(|d| format!("{}", d.as_secs()))
-                                .unwrap_or_else(|_| "0".to_string());
-
                             if let Some(ref undo_entry) = output.undo {
-                                log.push(UndoRecord {
-                                    timestamp: now,
-                                    file_path: file_path.to_string_lossy().to_string(),
-                                    entry: undo_entry.clone(),
-                                });
+                                record_undo(log, file_path, undo_entry);
                             }
                         }
 
@@ -199,9 +201,7 @@ pub fn run_json_mode(input: &str, config: &Config, jsonl: bool) {
     };
 
     println!("{}", response.to_json());
-    if !response.success {
-        process::exit(1);
-    }
+    if !response.success { Err(1) } else { Ok(()) }
 }
 
 /// Handle a JSON undo request: pop the last N entries from the undo log,
@@ -238,6 +238,7 @@ fn handle_json_undo(count: usize, config: &Config) {
 mod tests {
     use super::*;
     use ripsed_core::config::Config;
+    use ripsed_core::undo::UndoRecord;
     use std::fs;
     use tempfile::TempDir;
 

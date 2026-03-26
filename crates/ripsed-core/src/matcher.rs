@@ -9,6 +9,10 @@ pub enum Matcher {
         pattern: String,
         case_insensitive: bool,
     },
+    /// A regex matcher — used for both explicit `--regex` patterns and as the
+    /// implementation backing case-insensitive literal matching (via
+    /// `regex::escape` + `(?i)`), which avoids byte-offset mismatches from
+    /// `str::to_lowercase()` on multi-byte Unicode characters.
     Regex(Regex),
 }
 
@@ -19,11 +23,18 @@ impl Matcher {
         let is_regex = op.is_regex();
         let case_insensitive = op.is_case_insensitive();
 
-        if is_regex {
-            let re_pattern = if case_insensitive {
-                format!("(?i){pattern}")
-            } else {
+        if is_regex || case_insensitive {
+            // For case-insensitive literals, escape the pattern and delegate to
+            // the regex engine which handles Unicode casing correctly.
+            let re_src = if is_regex {
                 pattern.to_string()
+            } else {
+                regex::escape(pattern)
+            };
+            let re_pattern = if case_insensitive {
+                format!("(?i){re_src}")
+            } else {
+                re_src
             };
             Regex::new(&re_pattern)
                 .map(Matcher::Regex)
@@ -31,7 +42,7 @@ impl Matcher {
         } else {
             Ok(Matcher::Literal {
                 pattern: pattern.to_string(),
-                case_insensitive,
+                case_insensitive: false,
             })
         }
     }
@@ -39,16 +50,7 @@ impl Matcher {
     /// Check if the given text matches.
     pub fn is_match(&self, text: &str) -> bool {
         match self {
-            Matcher::Literal {
-                pattern,
-                case_insensitive,
-            } => {
-                if *case_insensitive {
-                    text.to_lowercase().contains(&pattern.to_lowercase())
-                } else {
-                    text.contains(pattern.as_str())
-                }
-            }
+            Matcher::Literal { pattern, .. } => text.contains(pattern.as_str()),
             Matcher::Regex(re) => re.is_match(text),
         }
     }
@@ -56,28 +58,8 @@ impl Matcher {
     /// Replace all matches in the given text. Returns None if no matches.
     pub fn replace(&self, text: &str, replacement: &str) -> Option<String> {
         match self {
-            Matcher::Literal {
-                pattern,
-                case_insensitive,
-            } => {
-                if *case_insensitive {
-                    // Case-insensitive literal replace
-                    let lower_text = text.to_lowercase();
-                    let lower_pattern = pattern.to_lowercase();
-                    if !lower_text.contains(&lower_pattern) {
-                        return None;
-                    }
-                    let mut result = String::with_capacity(text.len());
-                    let mut search_start = 0;
-                    while let Some(pos) = lower_text[search_start..].find(&lower_pattern) {
-                        let abs_pos = search_start + pos;
-                        result.push_str(&text[search_start..abs_pos]);
-                        result.push_str(replacement);
-                        search_start = abs_pos + pattern.len();
-                    }
-                    result.push_str(&text[search_start..]);
-                    Some(result)
-                } else if text.contains(pattern.as_str()) {
+            Matcher::Literal { pattern, .. } => {
+                if text.contains(pattern.as_str()) {
                     Some(text.replace(pattern.as_str(), replacement))
                 } else {
                     None
@@ -289,8 +271,8 @@ mod tests {
     #[test]
     fn test_case_insensitive_turkish_i_lowercase() {
         // Turkish dotted I: \u{0130} (capital I with dot above)
-        // to_lowercase() of \u{0130} is "i\u{0307}" in most locales
-        // This is a known edge case. We test that the matcher doesn't panic.
+        // This is a known edge case. We test that the matcher doesn't panic
+        // and behaves consistently with Unicode simple case folding.
         let op = Op::Replace {
             find: "i".to_string(),
             replace: "x".to_string(),
@@ -298,11 +280,13 @@ mod tests {
             case_insensitive: true,
         };
         let m = Matcher::new(&op).unwrap();
-        // Standard Rust to_lowercase: "I" -> "i", so this should match
+        // Standard ASCII: "I" simple-folds to "i", so this matches
         assert!(m.is_match("I"));
-        // \u{0130} (capital I with dot above) lowercases to "i\u{0307}" which
-        // does contain "i", so this should also match with to_lowercase()
-        assert!(m.is_match("\u{0130}"));
+        // \u{0130} (İ) has no simple case fold to "i" in Unicode — the full
+        // fold is "i\u{0307}" but the regex engine only uses simple folds.
+        // This correctly does NOT match, avoiding false positives from the
+        // old to_lowercase()-based byte-offset approach.
+        assert!(!m.is_match("\u{0130}"));
     }
 
     // ---------------------------------------------------------------

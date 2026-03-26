@@ -98,11 +98,43 @@ impl AtomicBatch {
         Ok(())
     }
 
-    /// Commit all staged writes atomically. If any rename fails,
-    /// remaining temp files are cleaned up automatically (via Drop).
+    /// Commit all staged writes atomically (all-or-nothing).
+    ///
+    /// Before renaming, the original contents of each destination file are
+    /// saved. If any rename fails mid-commit, all already-persisted files
+    /// are restored from the saved originals.
     pub fn commit(self) -> std::io::Result<()> {
+        // Phase 1: snapshot originals so we can roll back on partial failure.
+        let mut originals: Vec<(PathBuf, Option<Vec<u8>>)> = Vec::with_capacity(self.pending.len());
+        for (_tmp, dest) in &self.pending {
+            let content = if dest.exists() {
+                Some(fs::read(dest)?)
+            } else {
+                None
+            };
+            originals.push((dest.clone(), content));
+        }
+
+        // Phase 2: persist all temp files to their destinations.
+        let mut committed = 0usize;
         for (tmp, dest) in self.pending {
-            tmp.persist(&dest).map_err(|e| e.error)?;
+            match tmp.persist(&dest) {
+                Ok(_) => committed += 1,
+                Err(e) => {
+                    // Phase 3 (rollback): restore already-committed files.
+                    for (path, original) in originals.iter().take(committed) {
+                        match original {
+                            Some(data) => {
+                                let _ = fs::write(path, data);
+                            }
+                            None => {
+                                let _ = fs::remove_file(path);
+                            }
+                        }
+                    }
+                    return Err(e.error);
+                }
+            }
         }
         Ok(())
     }

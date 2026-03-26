@@ -119,9 +119,7 @@ pub fn apply(
                 }
             }
             Op::Transform { mode, .. } => {
-                if let Some(transformed) = matcher.replace(line, "") {
-                    // Replace matched text with transformed version
-                    let _ = transformed;
+                if matcher.is_match(line) {
                     let new_line = apply_transform(line, matcher, *mode);
                     if new_line != line {
                         let ctx = build_context(&lines, idx, context_lines);
@@ -228,27 +226,8 @@ pub fn apply(
 /// Apply a text transformation to matched portions of a line.
 fn apply_transform(line: &str, matcher: &Matcher, mode: TransformMode) -> String {
     match matcher {
-        Matcher::Literal {
-            pattern,
-            case_insensitive,
-        } => {
-            if *case_insensitive {
-                let lower_line = line.to_lowercase();
-                let lower_pat = pattern.to_lowercase();
-                let mut result = String::with_capacity(line.len());
-                let mut search_start = 0;
-                while let Some(pos) = lower_line[search_start..].find(&lower_pat) {
-                    let abs_pos = search_start + pos;
-                    result.push_str(&line[search_start..abs_pos]);
-                    let matched = &line[abs_pos..abs_pos + pattern.len()];
-                    result.push_str(&transform_text(matched, mode));
-                    search_start = abs_pos + pattern.len();
-                }
-                result.push_str(&line[search_start..]);
-                result
-            } else {
-                line.replace(pattern.as_str(), &transform_text(pattern, mode))
-            }
+        Matcher::Literal { pattern, .. } => {
+            line.replace(pattern.as_str(), &transform_text(pattern, mode))
         }
         Matcher::Regex(re) => {
             let result = re.replace_all(line, |caps: &regex::Captures| {
@@ -733,6 +712,22 @@ mod tests {
         let result = apply(text, &op, &matcher, None, 0).unwrap();
         assert_eq!(result.text.unwrap(), "hello WORLD\nFOO BAR\n");
         assert_eq!(result.changes.len(), 1);
+    }
+
+    #[test]
+    fn test_transform_noop_when_already_target_case() {
+        // Transforming already-lowercase text to Lower should produce no changes
+        let text = "hello world\nfoo bar\n";
+        let op = Op::Transform {
+            find: "hello".to_string(),
+            mode: TransformMode::Lower,
+            regex: false,
+            case_insensitive: false,
+        };
+        let matcher = Matcher::new(&op).unwrap();
+        let result = apply(text, &op, &matcher, None, 0).unwrap();
+        assert!(result.text.is_none(), "No text modification expected");
+        assert!(result.changes.is_empty(), "No changes expected");
     }
 
     #[test]

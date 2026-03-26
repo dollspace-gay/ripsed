@@ -1,6 +1,6 @@
 use memmap2::Mmap;
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::Read;
 use std::path::Path;
 
 /// Threshold for using memory-mapped I/O (1 MB).
@@ -8,9 +8,6 @@ const MMAP_THRESHOLD: u64 = 1024 * 1024;
 
 /// Size of the sample checked by `is_binary` (8 KB).
 const BINARY_CHECK_SIZE: usize = 8192;
-
-/// UTF-8 BOM bytes.
-const UTF8_BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
 
 /// Read a file's contents as a string.
 ///
@@ -24,29 +21,6 @@ pub fn read_file(path: &Path) -> std::io::Result<String> {
     } else {
         read_regular(path)
     }
-}
-
-/// Read a file's contents as a string, stripping a UTF-8 BOM if present.
-///
-/// The BOM (byte order mark, `0xEF 0xBB 0xBF`) is sometimes prepended to
-/// UTF-8 files by Windows editors. This function transparently removes it so
-/// downstream consumers never see it.
-pub fn read_file_with_encoding(path: &Path) -> std::io::Result<String> {
-    let raw = std::fs::read(path)?;
-    let data = if raw.starts_with(UTF8_BOM) {
-        &raw[UTF8_BOM.len()..]
-    } else {
-        &raw[..]
-    };
-    String::from_utf8(data.to_vec())
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
-}
-
-/// Return a `BufReader` wrapping the given file, suitable for streaming
-/// very large files line-by-line without loading them entirely into memory.
-pub fn read_file_streaming(path: &Path) -> std::io::Result<BufReader<File>> {
-    let file = File::open(path)?;
-    Ok(BufReader::new(file))
 }
 
 fn read_regular(path: &Path) -> std::io::Result<String> {
@@ -77,60 +51,6 @@ pub fn is_binary(path: &Path) -> std::io::Result<bool> {
 mod tests {
     use super::*;
     use std::fs;
-    use std::io::BufRead;
-
-    // ---- BOM handling tests ----
-
-    #[test]
-    fn read_file_with_encoding_strips_bom() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("bom.txt");
-        let mut data = Vec::from(UTF8_BOM);
-        data.extend_from_slice(b"Hello, world!");
-        fs::write(&path, &data).unwrap();
-
-        let content = read_file_with_encoding(&path).unwrap();
-        assert_eq!(content, "Hello, world!");
-    }
-
-    #[test]
-    fn read_file_with_encoding_no_bom() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("nobom.txt");
-        fs::write(&path, "No BOM here").unwrap();
-
-        let content = read_file_with_encoding(&path).unwrap();
-        assert_eq!(content, "No BOM here");
-    }
-
-    #[test]
-    fn read_file_with_encoding_empty_file() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("empty.txt");
-        fs::write(&path, "").unwrap();
-
-        let content = read_file_with_encoding(&path).unwrap();
-        assert_eq!(content, "");
-    }
-
-    #[test]
-    fn read_file_with_encoding_bom_only() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("bomonly.txt");
-        fs::write(&path, UTF8_BOM).unwrap();
-
-        let content = read_file_with_encoding(&path).unwrap();
-        assert_eq!(content, "");
-    }
-
-    #[test]
-    fn read_file_with_encoding_rejects_invalid_utf8() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("bad.txt");
-        fs::write(&path, [0xFF, 0xFE, 0x80]).unwrap();
-
-        assert!(read_file_with_encoding(&path).is_err());
-    }
 
     // ---- Binary detection tests ----
 
@@ -194,37 +114,6 @@ mod tests {
         fs::write(&path, "").unwrap();
 
         assert!(!is_binary(&path).unwrap());
-    }
-
-    // ---- Streaming reader tests ----
-
-    #[test]
-    fn read_file_streaming_reads_lines() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("lines.txt");
-        fs::write(&path, "line1\nline2\nline3\n").unwrap();
-
-        let reader = read_file_streaming(&path).unwrap();
-        let lines: Vec<String> = reader.lines().collect::<Result<_, _>>().unwrap();
-        assert_eq!(lines, vec!["line1", "line2", "line3"]);
-    }
-
-    #[test]
-    fn read_file_streaming_empty() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("empty.txt");
-        fs::write(&path, "").unwrap();
-
-        let reader = read_file_streaming(&path).unwrap();
-        let lines: Vec<String> = reader.lines().collect::<Result<_, _>>().unwrap();
-        assert!(lines.is_empty());
-    }
-
-    #[test]
-    fn read_file_streaming_nonexistent() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("nope.txt");
-        assert!(read_file_streaming(&path).is_err());
     }
 
     // ---- read_file tests ----

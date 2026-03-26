@@ -1,3 +1,4 @@
+use crate::reader;
 use ignore::WalkBuilder;
 use ripsed_core::operation::OpOptions;
 use std::path::{Path, PathBuf};
@@ -66,13 +67,8 @@ pub fn discover_files(opts: &DiscoveryOptions) -> Vec<PathBuf> {
         .filter_map(|entry| entry.ok())
         .filter(|entry| entry.file_type().is_some_and(|ft| ft.is_file()))
         .filter(|entry| {
-            // Filter out binary files by checking for null bytes in first 8KB
-            if let Ok(content) = std::fs::read(entry.path()) {
-                let check_len = content.len().min(8192);
-                !content[..check_len].contains(&0)
-            } else {
-                false
-            }
+            // Filter out binary files (reads only 8KB, not the whole file)
+            !reader::is_binary(entry.path()).unwrap_or(true)
         })
         .filter(|entry| {
             // Apply ignore pattern if set
@@ -131,13 +127,8 @@ pub fn discover_files_parallel(opts: &DiscoveryOptions) -> Vec<PathBuf> {
                 return ignore::WalkState::Continue;
             }
 
-            // Filter out binary files
-            if let Ok(content) = std::fs::read(entry.path()) {
-                let check_len = content.len().min(8192);
-                if content[..check_len].contains(&0) {
-                    return ignore::WalkState::Continue;
-                }
-            } else {
+            // Filter out binary files (reads only 8KB, not the whole file)
+            if reader::is_binary(entry.path()).unwrap_or(true) {
                 return ignore::WalkState::Continue;
             }
 

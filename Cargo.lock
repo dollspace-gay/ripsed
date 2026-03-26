@@ -784,7 +784,7 @@ checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 
 [[package]]
 name = "ripsed-cli"
-version = "0.2.1"
+version = "0.2.3"
 dependencies = [
  "anstream",
  "anstyle",
@@ -801,7 +801,7 @@ dependencies = [
 
 [[package]]
 name = "ripsed-core"
-version = "0.2.1"
+version = "0.2.3"
 dependencies = [
  "criterion",
  "proptest",
@@ -816,7 +816,7 @@ dependencies = [
 
 [[package]]
 name = "ripsed-fs"
-version = "0.2.1"
+version = "0.2.3"
 dependencies = [
  "ignore",
  "memmap2",
@@ -828,7 +828,7 @@ dependencies = [
 
 [[package]]
 name = "ripsed-json"
-version = "0.2.1"
+version = "0.2.3"
 dependencies = [
  "regex",
  "ripsed-core",

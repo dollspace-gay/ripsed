@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-03-26
+
+### Fixed
+- Fix Unicode byte-offset mismatch in case-insensitive literal matching (#1)
+- Fix non-atomic batch commit in AtomicBatch::commit (#2)
+- Fix discovery reading entire files for binary detection (#3)
+- Fix silent undo log write failures in save_undo_log (#4)
+- Fix silent file read error swallowing in JSON mode (#6)
+
+### Changed
+- Consolidate process::exit into single call site in main() (#8)
+- Extract shared record_undo() and build_op_options() helpers (#5)
+- Replace wasteful matcher.replace() with is_match() in Transform arm (#7)
+- Remove unused read_file_with_encoding and read_file_streaming (#10)
+- Add test for Transform no-op edge case (#9)
+
 ## [0.3.0] - 2026-03-01
 
 ### Added
@@ -24,6 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Op` and `TransformMode` enums are now `#[non_exhaustive]` for forward-compatible API evolution
 
 ### Fixed
+- Fix silent file read error swallowing in JSON mode (#6)
+- Fix silent undo log write failures in save_undo_log (#4)
+- Fix discovery reading entire files for binary detection (#3)
+- Fix non-atomic batch commit in AtomicBatch::commit (#2)
+- Fix Unicode byte-offset mismatch in case-insensitive literal matching (#1)
 - Two integration tests that ran JSON mode with `dry_run: false` and no `root`, causing ripsed to modify its own source tree during `cargo test`
 
 ## [0.2.0] - 2026-03-01

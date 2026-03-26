@@ -1,30 +1,28 @@
 use ripsed_core::config::Config;
 use ripsed_core::engine;
 use ripsed_core::matcher::Matcher;
-use ripsed_core::operation::{Op, OpOptions};
-use ripsed_core::undo::UndoRecord;
+use ripsed_core::operation::Op;
 use ripsed_fs::discovery::{DiscoveryOptions, discover_files_auto};
 use ripsed_fs::reader;
 use ripsed_fs::writer;
-use std::process;
 
 use crate::args::Cli;
 use crate::human;
 use crate::interactive::{self, ConfirmAction};
-use crate::shared::{load_undo_log, save_undo_log};
+use crate::shared::{build_op_options, load_undo_log, record_undo, save_undo_log};
 
 /// Handle `--undo N`: restore the last N files from the undo log.
-pub fn handle_undo(count: usize, config: &Config) {
+pub fn handle_undo(count: usize, config: &Config) -> Result<(), i32> {
     let mut log = load_undo_log(config);
     if log.is_empty() {
         eprintln!("ripsed: nothing to undo");
-        process::exit(1);
+        return Err(1);
     }
 
     let records = log.pop(count);
     if records.is_empty() {
         eprintln!("ripsed: nothing to undo");
-        process::exit(1);
+        return Err(1);
     }
 
     for record in &records {
@@ -40,6 +38,7 @@ pub fn handle_undo(count: usize, config: &Config) {
     }
 
     save_undo_log(&log);
+    Ok(())
 }
 
 /// Handle `--undo-list`: display recent undo log entries.
@@ -56,10 +55,10 @@ pub fn handle_undo_list(config: &Config) {
     }
 }
 
-pub fn run_file_mode(cli: &Cli, config: &Config) {
+pub fn run_file_mode(cli: &Cli, config: &Config) -> Result<(), i32> {
     let Some(ref find) = cli.find else {
         eprintln!("ripsed: missing FIND pattern");
-        process::exit(1);
+        return Err(1);
     };
 
     let op = build_op_from_cli(cli, find);
@@ -67,26 +66,11 @@ pub fn run_file_mode(cli: &Cli, config: &Config) {
         Ok(m) => m,
         Err(e) => {
             eprintln!("ripsed: {e}");
-            process::exit(1);
+            return Err(1);
         }
     };
 
-    let options = OpOptions {
-        dry_run: cli.dry_run,
-        root: None,
-        gitignore: if cli.no_gitignore {
-            false
-        } else {
-            config.defaults.gitignore
-        },
-        backup: cli.backup || config.defaults.backup,
-        atomic: false,
-        glob: cli.glob.clone(),
-        ignore: cli.ignore_pattern.clone(),
-        hidden: cli.hidden,
-        max_depth: cli.max_depth.or(config.defaults.max_depth),
-        line_range: cli.line_range,
-    };
+    let options = build_op_options(cli, config, cli.glob.clone());
 
     let mut discovery_opts = DiscoveryOptions::from_op_options(&options);
     discovery_opts.follow_links = cli.follow;
@@ -94,7 +78,7 @@ pub fn run_file_mode(cli: &Cli, config: &Config) {
 
     if files.is_empty() {
         eprintln!("ripsed: no files found");
-        process::exit(1);
+        return Err(1);
     }
 
     let mut total_changes = 0usize;
@@ -151,7 +135,7 @@ pub fn run_file_mode(cli: &Cli, config: &Config) {
                         if let Some(ref log) = undo_log {
                             save_undo_log(log);
                         }
-                        process::exit(0);
+                        return Ok(());
                     }
                 }
             }
@@ -178,21 +162,8 @@ pub fn run_file_mode(cli: &Cli, config: &Config) {
             if let Some(ref text) = output.text {
                 // Record undo entry before writing
                 if let Some(ref mut log) = undo_log {
-                    let now = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| {
-                            // ISO 8601-ish timestamp
-                            let secs = d.as_secs();
-                            format!("{secs}")
-                        })
-                        .unwrap_or_else(|_| "0".to_string());
-
                     if let Some(ref undo_entry) = output.undo {
-                        log.push(UndoRecord {
-                            timestamp: now,
-                            file_path: file_path.to_string_lossy().to_string(),
-                            entry: undo_entry.clone(),
-                        });
+                        record_undo(log, file_path, undo_entry);
                     }
                 }
 
@@ -217,9 +188,7 @@ pub fn run_file_mode(cli: &Cli, config: &Config) {
         human::print_summary(files_modified, total_changes, cli.dry_run);
     }
 
-    if total_changes == 0 {
-        process::exit(1);
-    }
+    if total_changes == 0 { Err(1) } else { Ok(()) }
 }
 
 pub fn build_op_from_cli(cli: &Cli, find: &str) -> Op {

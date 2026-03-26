@@ -1,22 +1,21 @@
 use ripsed_core::engine;
 use ripsed_core::matcher::Matcher;
-use std::process;
 
 use crate::args::Cli;
 use crate::file_mode::build_op_from_cli;
 
-pub fn run_pipe_mode(cli: &Cli, data: &[u8]) {
+pub fn run_pipe_mode(cli: &Cli, data: &[u8]) -> Result<(), i32> {
     let text = match std::str::from_utf8(data) {
         Ok(t) => t,
         Err(e) => {
             eprintln!("ripsed: stdin is not valid UTF-8: {e}");
-            process::exit(1);
+            return Err(1);
         }
     };
 
     let Some(ref find) = cli.find else {
         eprintln!("ripsed: missing FIND pattern");
-        process::exit(1);
+        return Err(1);
     };
 
     let op = build_op_from_cli(cli, find);
@@ -24,7 +23,7 @@ pub fn run_pipe_mode(cli: &Cli, data: &[u8]) {
         Ok(m) => m,
         Err(e) => {
             eprintln!("ripsed: {e}");
-            process::exit(1);
+            return Err(1);
         }
     };
 
@@ -35,10 +34,11 @@ pub fn run_pipe_mode(cli: &Cli, data: &[u8]) {
             } else {
                 print!("{}", output.text.as_deref().unwrap_or(text));
             }
+            Ok(())
         }
         Err(e) => {
             eprintln!("ripsed: {e}");
-            process::exit(1);
+            Err(1)
         }
     }
 }
