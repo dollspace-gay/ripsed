@@ -1,0 +1,8 @@
+{
+  "uuid": "f2f92189-3e2a-43ca-93ab-1a7315494edc",
+  "issue_uuid": "2911c1d2-7fbc-4cbc-b5b4-6764c2d9d14b",
+  "author": "anon-59ff128d",
+  "content": "Plan: Replace std::fs::read(entry.path()) in both discover_files and discover_files_parallel with the existing reader::is_binary() function which reads only 8KB via a fixed buffer. Need to add ripsed-fs internal dependency or use the same bounded-read approach inline.",
+  "created_at": "2026-03-26T00:14:36.164958321Z",
+  "kind": "plan"
+}
