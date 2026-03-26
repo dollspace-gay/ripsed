@@ -1,0 +1,8 @@
+{
+  "uuid": "3466200e-92bd-42b7-b19f-2b154562561e",
+  "issue_uuid": "125b0933-9b10-4da3-9910-61dc3ec181ea",
+  "author": "anon-59ff128d",
+  "content": "Plan: Add a unit test in engine.rs that applies TransformMode::Lower to already-lowercase text and verifies no changes are produced.",
+  "created_at": "2026-03-26T00:22:55.159276078Z",
+  "kind": "plan"
+}
