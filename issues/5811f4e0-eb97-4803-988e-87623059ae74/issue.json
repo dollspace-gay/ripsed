@@ -2,11 +2,12 @@
   "uuid": "5811f4e0-eb97-4803-988e-87623059ae74",
   "display_id": 7,
   "title": "Remove wasteful matcher.replace call in Transform engine arm",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "anon-59ff128d",
   "created_at": "2026-03-26T00:09:21.128732718Z",
-  "updated_at": "2026-03-26T00:09:23.305557712Z",
+  "updated_at": "2026-03-26T00:20:03.372743597Z",
+  "closed_at": "2026-03-26T00:20:03.372743597Z",
   "labels": [
     "enhancement"
   ]
