@@ -1,0 +1,8 @@
+{
+  "uuid": "b5e9a720-43db-414b-b7c9-54c63615853c",
+  "issue_uuid": "1f7f7b58-9faa-4ff7-9ea7-b4147db17b3a",
+  "author": "anon-59ff128d",
+  "content": "Delivered: Replaced byte-offset-based to_lowercase() slicing with regex::escape() + (?i) delegation for case-insensitive literal matching. Fixed both matcher.rs (is_match, replace) and engine.rs (apply_transform). Case-insensitive literals now construct a Regex internally, which handles Unicode simple case folding correctly. Updated Turkish İ test to reflect correct simple-fold behavior. All 508 tests pass.",
+  "created_at": "2026-03-26T00:11:37.074844107Z",
+  "kind": "result"
+}
