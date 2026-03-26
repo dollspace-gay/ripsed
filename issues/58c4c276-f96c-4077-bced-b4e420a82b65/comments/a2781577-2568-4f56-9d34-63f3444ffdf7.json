@@ -1,0 +1,8 @@
+{
+  "uuid": "a2781577-2568-4f56-9d34-63f3444ffdf7",
+  "issue_uuid": "58c4c276-f96c-4077-bced-b4e420a82b65",
+  "author": "anon-59ff128d",
+  "content": "Delivered: File read errors in JSON mode now push structured RipsedError (permission_denied or write_failed) into the errors vec, surfacing them in the JSON response. Previously silently swallowed with 'continue'. All 508 tests pass.",
+  "created_at": "2026-03-26T00:19:24.323669121Z",
+  "kind": "result"
+}
