@@ -1,0 +1,10 @@
+{
+  "uuid": "b6993272-6840-4208-b775-322c532f4bed",
+  "display_id": 10,
+  "title": "Remove dead code: read_file_with_encoding and read_file_streaming",
+  "status": "open",
+  "priority": "low",
+  "created_by": "anon-59ff128d",
+  "created_at": "2026-03-26T00:09:34.041453168Z",
+  "updated_at": "2026-03-26T00:09:34.041453168Z"
+}
