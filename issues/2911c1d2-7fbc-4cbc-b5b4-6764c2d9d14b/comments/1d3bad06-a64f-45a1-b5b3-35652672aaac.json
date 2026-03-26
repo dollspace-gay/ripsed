@@ -1,0 +1,8 @@
+{
+  "uuid": "1d3bad06-a64f-45a1-b5b3-35652672aaac",
+  "issue_uuid": "2911c1d2-7fbc-4cbc-b5b4-6764c2d9d14b",
+  "author": "anon-59ff128d",
+  "content": "Decision: Using the existing reader::is_binary() function since it's in the same crate (ripsed-fs). No new dependency needed — just a module-internal call.",
+  "created_at": "2026-03-26T00:14:46.611065071Z",
+  "kind": "decision"
+}
