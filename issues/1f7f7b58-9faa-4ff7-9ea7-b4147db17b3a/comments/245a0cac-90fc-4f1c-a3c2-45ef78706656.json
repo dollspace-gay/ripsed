@@ -1,0 +1,8 @@
+{
+  "uuid": "245a0cac-90fc-4f1c-a3c2-45ef78706656",
+  "issue_uuid": "1f7f7b58-9faa-4ff7-9ea7-b4147db17b3a",
+  "author": "anon-59ff128d",
+  "content": "Plan: Replace byte-offset slicing in case-insensitive literal matching with regex-based approach using regex::escape() + (?i) flag. This delegates all Unicode casing to the regex engine, which handles it correctly. Affects matcher.rs (Matcher::replace and Matcher::is_match) and engine.rs (apply_transform). The current code computes byte offsets in the lowercased string and uses them to index the original, which breaks when to_lowercase() changes byte length (e.g. Turkish İ).",
+  "created_at": "2026-03-26T00:09:47.225825276Z",
+  "kind": "plan"
+}
