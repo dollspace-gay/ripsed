@@ -1,0 +1,8 @@
+{
+  "uuid": "e4bff716-affa-48c8-943c-7dba9a8e6590",
+  "issue_uuid": "a883fce3-f9e8-473b-a858-80df6f7fa3d3",
+  "author": "anon-59ff128d",
+  "content": "Plan: Extract shared helpers into shared.rs: (1) record_undo() for timestamp + UndoRecord creation + push, (2) build_op_options() for constructing OpOptions from CLI args + config. Both are copy-pasted across file_mode, json_mode, and script_mode.",
+  "created_at": "2026-03-26T00:16:30.878986775Z",
+  "kind": "plan"
+}
