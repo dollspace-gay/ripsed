@@ -1,0 +1,10 @@
+{
+  "uuid": "125b0933-9b10-4da3-9910-61dc3ec181ea",
+  "display_id": 9,
+  "title": "Add test for Transform no-op when output equals input",
+  "status": "open",
+  "priority": "low",
+  "created_by": "anon-59ff128d",
+  "created_at": "2026-03-26T00:09:29.333090014Z",
+  "updated_at": "2026-03-26T00:09:29.333090014Z"
+}
