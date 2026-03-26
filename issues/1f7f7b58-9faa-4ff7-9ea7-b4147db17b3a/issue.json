@@ -2,11 +2,12 @@
   "uuid": "1f7f7b58-9faa-4ff7-9ea7-b4147db17b3a",
   "display_id": 1,
   "title": "Fix Unicode byte-offset mismatch in case-insensitive literal matching",
-  "status": "open",
+  "status": "closed",
   "priority": "critical",
   "created_by": "anon-59ff128d",
   "created_at": "2026-03-26T00:08:48.542432076Z",
-  "updated_at": "2026-03-26T00:08:51.144519502Z",
+  "updated_at": "2026-03-26T00:11:38.871809087Z",
+  "closed_at": "2026-03-26T00:11:38.871809087Z",
   "labels": [
     "bug"
   ]
