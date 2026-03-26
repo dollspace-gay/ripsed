@@ -1,0 +1,10 @@
+{
+  "uuid": "a883fce3-f9e8-473b-a858-80df6f7fa3d3",
+  "display_id": 5,
+  "title": "Remove duplicated undo-record creation across mode handlers",
+  "status": "open",
+  "priority": "low",
+  "created_by": "anon-59ff128d",
+  "created_at": "2026-03-26T00:09:12.988977602Z",
+  "updated_at": "2026-03-26T00:09:12.988977602Z"
+}
