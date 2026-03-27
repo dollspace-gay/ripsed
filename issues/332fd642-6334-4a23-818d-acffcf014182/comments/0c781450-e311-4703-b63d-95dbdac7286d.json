@@ -1,0 +1,8 @@
+{
+  "uuid": "0c781450-e311-4703-b63d-95dbdac7286d",
+  "issue_uuid": "332fd642-6334-4a23-818d-acffcf014182",
+  "author": "anon-59ff128d",
+  "content": "Replaced per-change confirm_change loop with file-level confirm_file function. The engine produces a single output text with all changes applied — per-change filtering was impossible. Now shows all changes for a file, then asks once: 'Apply changes to this file? [y/n/a/s/q]'. Removed dead confirm_change function. All CLI tests pass.",
+  "created_at": "2026-03-27T16:47:23.311241276Z",
+  "kind": "result"
+}
