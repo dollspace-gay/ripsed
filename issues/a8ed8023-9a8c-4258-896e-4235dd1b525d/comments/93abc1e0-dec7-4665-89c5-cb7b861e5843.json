@@ -1,0 +1,8 @@
+{
+  "uuid": "93abc1e0-dec7-4665-89c5-cb7b861e5843",
+  "issue_uuid": "a8ed8023-9a8c-4258-896e-4235dd1b525d",
+  "author": "anon-59ff128d",
+  "content": "Already implemented by issue #14 — MAX_REQUEST_BYTES constant and length check added to JsonRequest::parse in request.rs. Verified in detect.rs too.",
+  "created_at": "2026-03-27T17:10:23.613685671Z",
+  "kind": "observation"
+}
