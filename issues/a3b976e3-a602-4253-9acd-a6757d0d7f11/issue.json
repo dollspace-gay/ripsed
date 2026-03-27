@@ -1,0 +1,10 @@
+{
+  "uuid": "a3b976e3-a602-4253-9acd-a6757d0d7f11",
+  "display_id": 25,
+  "title": "Deduplicate shared file-processing logic between file_mode and script_mode",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "anon-59ff128d",
+  "created_at": "2026-03-27T13:16:36.754543319Z",
+  "updated_at": "2026-03-27T13:16:36.754543319Z"
+}
