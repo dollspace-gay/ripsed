@@ -1,0 +1,8 @@
+{
+  "uuid": "9f12feba-3e85-42be-b045-b13bdda6baf3",
+  "issue_uuid": "b4e3bf1d-7467-4eee-80a2-a4d91021f05f",
+  "author": "anon-59ff128d",
+  "content": "Extracted shared test helpers into `tests/common/mod.rs`. Removed duplicate `setup_test`, `json_path`, `setup_single_file`, and `setup_multi_file` from 10 test files. Left `git_init` in `gitignore_test.rs` (only used there) and `json_request` in `cli_json_test.rs` (unique helper). Also unified `setup_json_test` in `cli_json_test.rs` into the shared `common::setup_test`. All 148 tests pass with no warnings.",
+  "created_at": "2026-03-27T17:32:55.111212408Z",
+  "kind": "result"
+}
