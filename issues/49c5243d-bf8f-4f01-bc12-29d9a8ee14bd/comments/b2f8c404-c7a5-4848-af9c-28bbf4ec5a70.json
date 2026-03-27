@@ -1,0 +1,8 @@
+{
+  "uuid": "b2f8c404-c7a5-4848-af9c-28bbf4ec5a70",
+  "issue_uuid": "49c5243d-bf8f-4f01-bc12-29d9a8ee14bd",
+  "author": "anon-59ff128d",
+  "content": "Extracted a Mode enum (Script, UndoList, Undo, Pipe, JsonStdin, JsonArg, JsonMissingInput, PipeNoJson, File) and a resolve_mode(&Cli, stdin_is_tty) -> Mode function. run() is now a flat match on Mode variants with no nested if/else chains. Cyclomatic complexity reduced from ~16-18 to ~6. All 177 tests pass.",
+  "created_at": "2026-03-27T17:24:30.605955717Z",
+  "kind": "resolution"
+}
