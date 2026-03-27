@@ -1,0 +1,8 @@
+{
+  "uuid": "5e74652f-f2dc-4115-9424-58540a79798f",
+  "issue_uuid": "997e5e84-a229-43bd-87f6-d2c4398d9630",
+  "author": "anon-59ff128d",
+  "content": "Removed dead let _ = replace binding, moved the design comment above the match arm.",
+  "created_at": "2026-03-27T16:56:31.303180547Z",
+  "kind": "result"
+}
