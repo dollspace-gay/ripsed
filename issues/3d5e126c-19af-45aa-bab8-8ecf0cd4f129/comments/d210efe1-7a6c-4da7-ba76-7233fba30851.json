@@ -1,0 +1,8 @@
+{
+  "uuid": "d210efe1-7a6c-4da7-ba76-7233fba30851",
+  "issue_uuid": "3d5e126c-19af-45aa-bab8-8ecf0cd4f129",
+  "author": "anon-59ff128d",
+  "content": "Changing pub mod to mod for file_mode, json_mode, pipe_mode, script_mode, shared — binary crate has no external consumers.",
+  "created_at": "2026-03-27T17:11:37.728724004Z",
+  "kind": "plan"
+}
