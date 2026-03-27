@@ -2,11 +2,12 @@
   "uuid": "a8ed8023-9a8c-4258-896e-4235dd1b525d",
   "display_id": 41,
   "title": "Add JSON request size limit to JsonRequest::parse",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "anon-59ff128d",
   "created_at": "2026-03-27T13:18:28.375159402Z",
-  "updated_at": "2026-03-27T13:18:31.761160515Z",
+  "updated_at": "2026-03-27T17:10:25.954506089Z",
+  "closed_at": "2026-03-27T17:10:25.954506089Z",
   "labels": [
     "security"
   ]
