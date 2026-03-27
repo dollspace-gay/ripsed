@@ -2,11 +2,12 @@
   "uuid": "d65588b8-abdb-40c5-9ef9-dc34694919a7",
   "display_id": 15,
   "title": "Fix silent backup failure in JSON mode causing potential data loss",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "anon-59ff128d",
   "created_at": "2026-03-27T13:15:34.879016504Z",
-  "updated_at": "2026-03-27T13:15:36.438374253Z",
+  "updated_at": "2026-03-27T16:45:14.449434374Z",
+  "closed_at": "2026-03-27T16:45:14.449434374Z",
   "labels": [
     "bug"
   ]
