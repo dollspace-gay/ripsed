@@ -1,0 +1,8 @@
+{
+  "uuid": "9d168233-4967-4e26-a636-72fb4c8e181c",
+  "issue_uuid": "897467a2-dfdc-4339-8d50-626a9902c75c",
+  "author": "anon-59ff128d",
+  "content": "Matcher::new now sets operation_index to None instead of hardcoded 0. Callers that know the real index (json_mode) already override it. 18/18 matcher tests pass.",
+  "created_at": "2026-03-27T17:13:41.400809861Z",
+  "kind": "result"
+}
