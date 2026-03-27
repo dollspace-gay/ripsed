@@ -1,0 +1,8 @@
+{
+  "uuid": "887f199c-4e93-424b-b104-e7b1b069a355",
+  "issue_uuid": "a93f98e7-f260-4459-a0cd-fc756e80e06e",
+  "author": "anon-59ff128d",
+  "content": "Root cause: writeln!(file, ...) may not flush to disk before the second acquire reads the lock file. Empty file → treated as stale → auto-removed. Fix: flush after writing PID.",
+  "created_at": "2026-03-27T18:21:34.646943532Z",
+  "kind": "observation"
+}
