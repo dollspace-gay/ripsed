@@ -1,0 +1,8 @@
+{
+  "uuid": "987ab310-01c3-4d45-936b-ac9cb7f56b85",
+  "issue_uuid": "07b847cc-cf6d-4214-9285-d317992296ac",
+  "author": "anon-59ff128d",
+  "content": "Improved SAFETY comment to document immediate .to_vec() copy and rename-based atomic write safety. Added mmap code path test (issue #47). 8/8 reader tests pass.",
+  "created_at": "2026-03-27T17:20:26.915209821Z",
+  "kind": "result"
+}
