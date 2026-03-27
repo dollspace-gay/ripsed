@@ -2,11 +2,12 @@
   "uuid": "92b69e93-e4cb-4363-bf36-ebe762b47999",
   "display_id": 13,
   "title": "Fix silent acceptance of invalid glob patterns in file discovery",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "anon-59ff128d",
   "created_at": "2026-03-27T13:15:20.655851206Z",
-  "updated_at": "2026-03-27T13:15:23.961966548Z",
+  "updated_at": "2026-03-27T16:48:47.292546738Z",
+  "closed_at": "2026-03-27T16:48:47.292546738Z",
   "labels": [
     "bug"
   ]
