@@ -1,0 +1,8 @@
+{
+  "uuid": "c55831a9-54a3-4b5c-a4e0-e3127ea3c4d1",
+  "issue_uuid": "f9ac4573-e1fc-4a26-85a4-185fc04ed294",
+  "author": "anon-59ff128d",
+  "content": "Replacing unwrap_or_else with expect — all fields are String/bool/usize/Vec which are infallibly serializable by serde_json.",
+  "created_at": "2026-03-27T17:12:20.860704377Z",
+  "kind": "plan"
+}
