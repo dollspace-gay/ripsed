@@ -1,0 +1,8 @@
+{
+  "uuid": "bc1704ba-29df-45b0-8035-44bca140bfa9",
+  "issue_uuid": "e12ed5bc-ab1c-4a27-bf91-f8055b50dfb0",
+  "author": "anon-59ff128d",
+  "content": "Changing load_config to return Result<Config, i32> to match run()'s error type. Single caller in main.rs:25.",
+  "created_at": "2026-03-27T17:10:46.239915299Z",
+  "kind": "plan"
+}
