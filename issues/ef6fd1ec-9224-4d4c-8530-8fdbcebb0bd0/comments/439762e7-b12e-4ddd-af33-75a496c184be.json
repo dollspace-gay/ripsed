@@ -1,0 +1,8 @@
+{
+  "uuid": "439762e7-b12e-4ddd-af33-75a496c184be",
+  "issue_uuid": "ef6fd1ec-9224-4d4c-8530-8fdbcebb0bd0",
+  "author": "anon-59ff128d",
+  "content": "This is a behavior change that would break existing undo logs. The current cwd-based approach is documented and consistent. Closing as wontfix — would need a migration path if we change this later.",
+  "created_at": "2026-03-27T17:24:13.163521337Z",
+  "kind": "decision"
+}
