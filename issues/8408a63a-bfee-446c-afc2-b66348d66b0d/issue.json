@@ -2,11 +2,12 @@
   "uuid": "8408a63a-bfee-446c-afc2-b66348d66b0d",
   "display_id": 28,
   "title": "Make confirm_change testable by accepting Read/Write trait objects",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "anon-59ff128d",
   "created_at": "2026-03-27T13:16:56.446243055Z",
-  "updated_at": "2026-03-27T13:17:00.645626956Z",
+  "updated_at": "2026-03-27T17:10:20.613949916Z",
+  "closed_at": "2026-03-27T17:10:20.613949916Z",
   "labels": [
     "enhancement"
   ]
