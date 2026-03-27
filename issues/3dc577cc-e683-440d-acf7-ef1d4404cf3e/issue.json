@@ -2,11 +2,12 @@
   "uuid": "3dc577cc-e683-440d-acf7-ef1d4404cf3e",
   "display_id": 21,
   "title": "Fix Dedent not handling tabs, breaking round-trip with tab Indent",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "anon-59ff128d",
   "created_at": "2026-03-27T13:16:05.411274173Z",
-  "updated_at": "2026-03-27T13:16:08.240858676Z",
+  "updated_at": "2026-03-27T16:53:58.796077820Z",
+  "closed_at": "2026-03-27T16:53:58.796077820Z",
   "labels": [
     "bug"
   ]
