@@ -1,0 +1,8 @@
+{
+  "uuid": "179c5475-d6c3-49d0-a6ae-fa66dd079838",
+  "issue_uuid": "897467a2-dfdc-4339-8d50-626a9902c75c",
+  "author": "anon-59ff128d",
+  "content": "Matcher::new hardcodes operation_index=0. In json_mode the caller already overrides to the real index. Fix: pass None for operation_index in the error, let callers set it.",
+  "created_at": "2026-03-27T17:13:14.353684822Z",
+  "kind": "plan"
+}
