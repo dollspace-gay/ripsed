@@ -1,0 +1,8 @@
+{
+  "uuid": "90079043-6d5a-4dcd-84dd-f0020c08b240",
+  "issue_uuid": "97c7d5cf-393b-4b6c-b36a-6e165f8ba6ac",
+  "author": "anon-59ff128d",
+  "content": "Replaced full serde_json::Value deserialization in is_ripsed_json with a lightweight substring heuristic: checks that the trimmed input starts with '{' and contains the literal string '\"operations\"'. This eliminates the double-parse cost since JsonRequest::parse performs full validation downstream anyway. All 68 ripsed-json tests pass.",
+  "created_at": "2026-03-27T17:20:06.875998796Z",
+  "kind": "result"
+}
