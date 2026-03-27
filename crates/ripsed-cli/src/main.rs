@@ -1,11 +1,11 @@
 mod args;
-pub mod file_mode;
+mod file_mode;
 mod human;
 mod interactive;
-pub mod json_mode;
-pub mod pipe_mode;
-pub mod script_mode;
-pub mod shared;
+mod json_mode;
+mod pipe_mode;
+mod script_mode;
+mod shared;
 
 use args::Cli;
 use clap::Parser;
@@ -22,7 +22,10 @@ fn run() -> i32 {
     let cli = Cli::parse();
 
     // Load config from --config or auto-discover
-    let config = shared::load_config(&cli);
+    let config = match shared::load_config(&cli) {
+        Ok(c) => c,
+        Err(code) => return code,
+    };
 
     // Handle --script before other modes
     if let Some(ref script_path) = cli.script {

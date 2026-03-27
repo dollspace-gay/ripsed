@@ -1,5 +1,5 @@
 use std::fs::{File, OpenOptions};
-use std::io;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -12,11 +12,17 @@ pub struct FileLock {
 
 impl FileLock {
     /// Attempt to acquire an advisory lock on the given path.
-    /// Creates a `.ripsed.lock` file adjacent to the target.
+    /// Creates a `.ripsed.lock` file adjacent to the target, containing the
+    /// current PID and a Unix timestamp for staleness detection.
     pub fn acquire(path: &Path) -> io::Result<Self> {
         let lock_path = lock_path_for(path);
 
-        let file = OpenOptions::new()
+        // If a stale lock exists, remove it before attempting to create
+        if lock_path.exists() && is_lock_stale(&lock_path) {
+            let _ = std::fs::remove_file(&lock_path);
+        }
+
+        let mut file = OpenOptions::new()
             .write(true)
             .create_new(true)
             .open(&lock_path)
@@ -30,6 +36,14 @@ impl FileLock {
                     e
                 }
             })?;
+
+        // Write PID and timestamp for staleness detection
+        let pid = std::process::id();
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let _ = writeln!(file, "{pid} {timestamp}");
 
         Ok(Self {
             file: Some(file),
@@ -84,12 +98,53 @@ impl Drop for FileLock {
     }
 }
 
+/// Check whether a lock file is stale (the owning process no longer exists).
+///
+/// Reads the PID from the lock file and checks if that process is alive.
+/// Returns `true` if the lock is stale (process is dead or file is unreadable).
+fn is_lock_stale(lock_path: &Path) -> bool {
+    let contents = match std::fs::read_to_string(lock_path) {
+        Ok(c) => c,
+        Err(_) => return true, // Can't read = treat as stale
+    };
+
+    // Empty lock files (from older versions) are treated as stale
+    let pid_str = match contents.split_whitespace().next() {
+        Some(s) => s,
+        None => return true,
+    };
+
+    let pid: u32 = match pid_str.parse() {
+        Ok(p) => p,
+        Err(_) => return true,
+    };
+
+    !is_process_alive(pid)
+}
+
+/// Check if a process with the given PID is still running.
+#[cfg(unix)]
+fn is_process_alive(pid: u32) -> bool {
+    // Check /proc/{pid} existence — works on Linux and most Unix systems
+    Path::new(&format!("/proc/{pid}")).exists()
+}
+
+#[cfg(not(unix))]
+fn is_process_alive(_pid: u32) -> bool {
+    // On non-Unix platforms, conservatively assume the process is alive
+    true
+}
+
 /// Compute the lock-file path for a given target path.
 fn lock_path_for(path: &Path) -> PathBuf {
-    path.with_extension(format!(
-        "{}.ripsed.lock",
-        path.extension().and_then(|e| e.to_str()).unwrap_or("")
-    ))
+    match path.extension().and_then(|e| e.to_str()) {
+        Some(ext) => path.with_extension(format!("{ext}.ripsed.lock")),
+        None => {
+            let mut os = path.as_os_str().to_os_string();
+            os.push(".ripsed.lock");
+            PathBuf::from(os)
+        }
+    }
 }
 
 #[cfg(test)]

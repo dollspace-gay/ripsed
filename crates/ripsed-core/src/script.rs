@@ -308,9 +308,11 @@ fn parse_script_line(line: &str, line_num: usize) -> Result<ScriptOp, RipsedErro
         "dedent" => {
             require_positional_count(&positional, 1, "dedent", line_num)?;
             let amount = parse_amount(&named, line_num, 4)?;
+            let use_tabs = named.contains_key("use_tabs");
             Op::Dedent {
                 find: positional[0].clone(),
                 amount,
+                use_tabs,
                 regex,
                 case_insensitive,
             }
@@ -681,6 +683,7 @@ mod tests {
             Op::Dedent {
                 find: "over_indented".to_string(),
                 amount: 2,
+                use_tabs: false,
                 regex: false,
                 case_insensitive: false,
             }

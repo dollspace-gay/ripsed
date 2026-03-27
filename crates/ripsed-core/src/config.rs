@@ -68,9 +68,7 @@ impl Default for UndoConfig {
     }
 }
 
-fn default_true() -> bool {
-    true
-}
+use crate::default_true;
 
 fn default_context_lines() -> usize {
     3
@@ -82,24 +80,25 @@ fn default_max_entries() -> usize {
 
 impl Config {
     /// Load configuration by walking up from `start_dir` looking for `.ripsed.toml`.
-    pub fn discover(start_dir: &Path) -> Option<(PathBuf, Config)> {
+    ///
+    /// Returns `Ok(None)` if no config file is found.
+    /// Returns `Err` if a config file is found but cannot be read or parsed.
+    pub fn discover(start_dir: &Path) -> Result<Option<(PathBuf, Config)>, String> {
         let mut dir = start_dir.to_path_buf();
         loop {
             let config_path = dir.join(".ripsed.toml");
             if config_path.exists() {
-                match std::fs::read_to_string(&config_path) {
-                    Ok(content) => match toml::from_str::<Config>(&content) {
-                        Ok(config) => return Some((config_path, config)),
-                        Err(_) => return None,
-                    },
-                    Err(_) => return None,
-                }
+                let content = std::fs::read_to_string(&config_path)
+                    .map_err(|e| format!("Cannot read {}: {e}", config_path.display()))?;
+                let config = toml::from_str::<Config>(&content)
+                    .map_err(|e| format!("Invalid TOML in {}: {e}", config_path.display()))?;
+                return Ok(Some((config_path, config)));
             }
             if !dir.pop() {
                 break;
             }
         }
-        None
+        Ok(None)
     }
 
     /// Load from a specific path.
@@ -188,7 +187,7 @@ backup = true
         let config_path = dir.path().join(".ripsed.toml");
         fs::write(&config_path, "[defaults]\nbackup = true\n").unwrap();
 
-        let (found_path, config) = Config::discover(dir.path()).unwrap();
+        let (found_path, config) = Config::discover(dir.path()).unwrap().unwrap();
         assert_eq!(found_path, config_path);
         assert!(config.defaults.backup);
     }
@@ -204,21 +203,23 @@ backup = true
         )
         .unwrap();
 
-        let (_, config) = Config::discover(&child).unwrap();
+        let (_, config) = Config::discover(&child).unwrap().unwrap();
         assert_eq!(config.undo.max_entries, 42);
     }
 
     #[test]
     fn discover_returns_none_when_not_found() {
         let dir = TempDir::new().unwrap();
-        assert!(Config::discover(dir.path()).is_none());
+        assert!(Config::discover(dir.path()).unwrap().is_none());
     }
 
     #[test]
-    fn discover_returns_none_for_invalid_toml() {
+    fn discover_returns_error_for_invalid_toml() {
         let dir = TempDir::new().unwrap();
         fs::write(dir.path().join(".ripsed.toml"), "not [valid toml!!!").unwrap();
-        assert!(Config::discover(dir.path()).is_none());
+        let result = Config::discover(dir.path());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid TOML"));
     }
 
     // ── Config::load ──

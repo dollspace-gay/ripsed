@@ -107,10 +107,10 @@ impl AtomicBatch {
         // Phase 1: snapshot originals so we can roll back on partial failure.
         let mut originals: Vec<(PathBuf, Option<Vec<u8>>)> = Vec::with_capacity(self.pending.len());
         for (_tmp, dest) in &self.pending {
-            let content = if dest.exists() {
-                Some(fs::read(dest)?)
-            } else {
-                None
+            let content = match fs::read(dest) {
+                Ok(data) => Some(data),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+                Err(e) => return Err(e),
             };
             originals.push((dest.clone(), content));
         }
@@ -137,12 +137,6 @@ impl AtomicBatch {
             }
         }
         Ok(())
-    }
-
-    /// Discard all staged writes (temp files are cleaned up via Drop).
-    pub fn rollback(self) {
-        // NamedTempFile::drop() cleans up automatically
-        drop(self);
     }
 }
 
@@ -254,7 +248,7 @@ mod tests {
 
         let mut batch = AtomicBatch::new();
         batch.stage(&a, "should not appear").unwrap();
-        batch.rollback();
+        drop(batch);
 
         assert!(!a.exists());
     }

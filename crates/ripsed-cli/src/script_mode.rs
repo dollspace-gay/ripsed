@@ -2,7 +2,7 @@ use ripsed_core::config::Config;
 use ripsed_core::engine;
 use ripsed_core::matcher::Matcher;
 use ripsed_core::script::{Script, parse_script};
-use ripsed_fs::discovery::{DiscoveryOptions, discover_files_auto};
+use ripsed_fs::discovery::{WalkStrategy, discover_files_auto};
 use ripsed_fs::reader;
 use ripsed_fs::writer;
 use std::collections::HashSet;
@@ -60,9 +60,15 @@ pub fn run_script_mode(script_path: &str, cli: &Cli, config: &Config) -> Result<
         let effective_glob = script_op.glob.clone().or_else(|| cli.glob.clone());
         let options = build_op_options(cli, config, effective_glob);
 
-        let mut discovery_opts = DiscoveryOptions::from_op_options(&options);
+        let mut discovery_opts = crate::shared::discovery_opts_from(&options);
         discovery_opts.follow_links = cli.follow;
-        let files = discover_files_auto(&discovery_opts, false);
+        let files = match discover_files_auto(&discovery_opts, WalkStrategy::Auto) {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!("ripsed: {e}");
+                continue;
+            }
+        };
 
         if files.is_empty() {
             continue;

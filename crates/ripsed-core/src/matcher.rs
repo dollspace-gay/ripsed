@@ -7,7 +7,6 @@ use regex::Regex;
 pub enum Matcher {
     Literal {
         pattern: String,
-        case_insensitive: bool,
     },
     /// A regex matcher — used for both explicit `--regex` patterns and as the
     /// implementation backing case-insensitive literal matching (via
@@ -36,13 +35,14 @@ impl Matcher {
             } else {
                 re_src
             };
-            Regex::new(&re_pattern)
-                .map(Matcher::Regex)
-                .map_err(|e| RipsedError::invalid_regex(0, pattern, &e.to_string()))
+            Regex::new(&re_pattern).map(Matcher::Regex).map_err(|e| {
+                let mut err = RipsedError::invalid_regex(0, pattern, &e.to_string());
+                err.operation_index = None;
+                err
+            })
         } else {
             Ok(Matcher::Literal {
                 pattern: pattern.to_string(),
-                case_insensitive: false,
             })
         }
     }

@@ -820,9 +820,7 @@ version = "0.2.3"
 dependencies = [
  "ignore",
  "memmap2",
- "proptest",
  "rayon",
- "ripsed-core",
  "tempfile",
 ]
 

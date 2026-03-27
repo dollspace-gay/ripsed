@@ -17,28 +17,36 @@ pub enum ConfirmAction {
     Quit,
 }
 
-/// Prompt the user to confirm a change.
-/// Returns a `ConfirmAction` indicating what to do.
+/// Prompt the user to confirm all changes in a file.
+/// Shows a preview of each change, then asks once whether to apply.
 ///
 /// Accepted inputs:
 ///   y / yes  -> Yes
 ///   n / no   -> No  (default on empty input)
-///   a / all  -> ApplyAll
+///   a / all  -> ApplyAll (apply this file and all remaining without prompts)
 ///   s / skip -> SkipFile
 ///   q / quit -> Quit
-pub fn confirm_change(path: &Path, change: &Change) -> ConfirmAction {
+pub fn confirm_file(path: &Path, changes: &[Change]) -> ConfirmAction {
     let bold = anstyle::Style::new().bold();
     let red = anstyle::Style::new().fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Red)));
     let green =
         anstyle::Style::new().fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Green)));
     let reset = anstyle::Reset;
 
-    eprintln!("{bold}{}{reset} line {}:", path.display(), change.line);
-    eprintln!("{red}- {}{reset}", change.before);
-    if let Some(ref after) = change.after {
-        eprintln!("{green}+ {after}{reset}");
+    eprintln!(
+        "\n{bold}{}{reset} ({} change{}):",
+        path.display(),
+        changes.len(),
+        if changes.len() == 1 { "" } else { "s" }
+    );
+    for change in changes {
+        eprintln!("  line {}:", change.line);
+        eprintln!("  {red}- {}{reset}", change.before);
+        if let Some(ref after) = change.after {
+            eprintln!("  {green}+ {after}{reset}");
+        }
     }
-    eprint!("Apply this change? [y/n/a/s/q] ");
+    eprint!("Apply changes to this file? [y/n/a/s/q] ");
     io::stderr().flush().ok();
 
     let mut response = String::new();

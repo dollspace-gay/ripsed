@@ -118,6 +118,8 @@ pub enum Op {
         #[serde(default = "default_indent_amount")]
         amount: usize,
         #[serde(default)]
+        use_tabs: bool,
+        #[serde(default)]
         regex: bool,
         #[serde(default)]
         case_insensitive: bool,
@@ -178,9 +180,7 @@ impl LineRange {
     }
 }
 
-fn default_true() -> bool {
-    true
-}
+use crate::default_true;
 
 impl Op {
     /// Extract the find pattern from the operation.
@@ -632,6 +632,7 @@ mod tests {
         let op = Op::Dedent {
             find: "code".into(),
             amount: 2,
+            use_tabs: false,
             regex: true,
             case_insensitive: true,
         };
@@ -645,6 +646,7 @@ mod tests {
         let op = Op::Dedent {
             find: "line".into(),
             amount: 4,
+            use_tabs: false,
             regex: false,
             case_insensitive: false,
         };
@@ -697,6 +699,7 @@ mod tests {
             Op::Dedent {
                 find: "d".into(),
                 amount: 4,
+                use_tabs: false,
                 regex: false,
                 case_insensitive: false,
             },
@@ -733,6 +736,7 @@ mod tests {
             Op::Dedent {
                 find: "x".into(),
                 amount: 4,
+                use_tabs: false,
                 regex: true,
                 case_insensitive: false,
             },
@@ -768,6 +772,7 @@ mod tests {
             Op::Dedent {
                 find: "x".into(),
                 amount: 4,
+                use_tabs: false,
                 regex: false,
                 case_insensitive: true,
             },

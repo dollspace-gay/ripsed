@@ -32,7 +32,7 @@ impl UndoResponse {
     /// Serialize to JSON string.
     pub fn to_json(&self) -> String {
         serde_json::to_string_pretty(self)
-            .unwrap_or_else(|_| r#"{"version":"1","success":false}"#.to_string())
+            .expect("UndoResponse serialization is infallible for known field types")
     }
 }
 
@@ -40,7 +40,7 @@ impl JsonResponse {
     /// Build a success response.
     pub fn success(dry_run: bool, summary: Summary, results: Vec<OpResult>) -> Self {
         Self {
-            version: "1".to_string(),
+            version: crate::schema::CURRENT_VERSION.to_string(),
             success: true,
             dry_run,
             summary,
@@ -52,7 +52,7 @@ impl JsonResponse {
     /// Build an error response.
     pub fn error(errors: Vec<RipsedError>) -> Self {
         Self {
-            version: "1".to_string(),
+            version: crate::schema::CURRENT_VERSION.to_string(),
             success: false,
             dry_run: false,
             summary: Summary::default(),
@@ -63,9 +63,8 @@ impl JsonResponse {
 
     /// Serialize to JSON string.
     pub fn to_json(&self) -> String {
-        serde_json::to_string_pretty(self).unwrap_or_else(|_| {
-            r#"{"version":"1","success":false,"errors":[{"code":"internal_error","message":"Failed to serialize response"}]}"#.to_string()
-        })
+        serde_json::to_string_pretty(self)
+            .expect("JsonResponse serialization is infallible for known field types")
     }
 }
 

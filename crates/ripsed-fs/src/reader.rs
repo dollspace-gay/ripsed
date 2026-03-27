@@ -32,7 +32,10 @@ fn read_regular(path: &Path) -> std::io::Result<String> {
 
 fn read_mmap(path: &Path) -> std::io::Result<String> {
     let file = File::open(path)?;
-    // SAFETY: We only read the file and don't hold the mapping across modifications.
+    // SAFETY: The mapping is immediately copied into an owned Vec via `.to_vec()`,
+    // so the mmap is live for only the duration of that copy. A concurrent writer
+    // using rename-based atomic writes (as ripsed does) cannot affect the mapped
+    // inode during this window. The resulting Vec is a stable snapshot.
     let mmap = unsafe { Mmap::map(&file)? };
     String::from_utf8(mmap.to_vec())
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
@@ -125,5 +128,18 @@ mod tests {
         fs::write(&path, "hello").unwrap();
 
         assert_eq!(read_file(&path).unwrap(), "hello");
+    }
+
+    #[test]
+    fn read_file_large_uses_mmap_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("large.txt");
+        // Create a file larger than MMAP_THRESHOLD (1 MB + 1 byte)
+        let content = "x".repeat(MMAP_THRESHOLD as usize + 1);
+        fs::write(&path, &content).unwrap();
+
+        let result = read_file(&path).unwrap();
+        assert_eq!(result.len(), MMAP_THRESHOLD as usize + 1);
+        assert_eq!(result, content);
     }
 }

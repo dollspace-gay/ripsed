@@ -10,6 +10,7 @@ pub struct UndoEntry {
 /// A record in the persistent undo log file (.ripsed/undo.jsonl).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UndoRecord {
+    /// Unix epoch seconds as a decimal string (e.g., `"1711550400"`).
     pub timestamp: String,
     pub file_path: String,
     pub entry: UndoEntry,

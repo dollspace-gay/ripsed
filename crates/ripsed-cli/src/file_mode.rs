@@ -2,14 +2,16 @@ use ripsed_core::config::Config;
 use ripsed_core::engine;
 use ripsed_core::matcher::Matcher;
 use ripsed_core::operation::Op;
-use ripsed_fs::discovery::{DiscoveryOptions, discover_files_auto};
+use ripsed_fs::discovery::{WalkStrategy, discover_files_auto};
 use ripsed_fs::reader;
 use ripsed_fs::writer;
 
 use crate::args::Cli;
 use crate::human;
 use crate::interactive::{self, ConfirmAction};
-use crate::shared::{build_op_options, load_undo_log, record_undo, save_undo_log};
+use crate::shared::{
+    build_op_options, discovery_opts_from, load_undo_log, record_undo, save_undo_log,
+};
 
 /// Handle `--undo N`: restore the last N files from the undo log.
 pub fn handle_undo(count: usize, config: &Config) -> Result<(), i32> {
@@ -72,9 +74,15 @@ pub fn run_file_mode(cli: &Cli, config: &Config) -> Result<(), i32> {
 
     let options = build_op_options(cli, config, cli.glob.clone());
 
-    let mut discovery_opts = DiscoveryOptions::from_op_options(&options);
+    let mut discovery_opts = discovery_opts_from(&options);
     discovery_opts.follow_links = cli.follow;
-    let files = discover_files_auto(&discovery_opts, false);
+    let files = match discover_files_auto(&discovery_opts, WalkStrategy::Auto) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("ripsed: {e}");
+            return Err(1);
+        }
+    };
 
     if files.is_empty() {
         eprintln!("ripsed: no files found");
@@ -114,33 +122,22 @@ pub fn run_file_mode(cli: &Cli, config: &Config) -> Result<(), i32> {
             continue;
         }
 
-        // Handle --confirm: prompt for each change in this file
+        // Handle --confirm: show changes and prompt per file
         if cli.confirm && !apply_all {
-            let mut skip_file = false;
-            for change in &output.changes {
-                let action = interactive::confirm_change(file_path, change);
-                match action {
-                    ConfirmAction::Yes => {}
-                    ConfirmAction::No => continue,
-                    ConfirmAction::ApplyAll => {
-                        apply_all = true;
-                        break;
-                    }
-                    ConfirmAction::SkipFile => {
-                        skip_file = true;
-                        break;
-                    }
-                    ConfirmAction::Quit => {
-                        // Save undo log before quitting
-                        if let Some(ref log) = undo_log {
-                            save_undo_log(log);
-                        }
-                        return Ok(());
-                    }
+            let action = interactive::confirm_file(file_path, &output.changes);
+            match action {
+                ConfirmAction::Yes => {}
+                ConfirmAction::No | ConfirmAction::SkipFile => continue,
+                ConfirmAction::ApplyAll => {
+                    apply_all = true;
                 }
-            }
-            if skip_file {
-                continue;
+                ConfirmAction::Quit => {
+                    // Save undo log before quitting
+                    if let Some(ref log) = undo_log {
+                        save_undo_log(log);
+                    }
+                    return Ok(());
+                }
             }
         }
 
@@ -192,69 +189,74 @@ pub fn run_file_mode(cli: &Cli, config: &Config) -> Result<(), i32> {
 }
 
 pub fn build_op_from_cli(cli: &Cli, find: &str) -> Op {
+    let find = find.to_string();
+    let regex = cli.regex;
+    let case_insensitive = cli.case_insensitive;
+
     if cli.delete {
         Op::Delete {
-            find: find.to_string(),
-            regex: cli.regex,
-            case_insensitive: cli.case_insensitive,
+            find,
+            regex,
+            case_insensitive,
         }
     } else if let Some(ref content) = cli.after {
         Op::InsertAfter {
-            find: find.to_string(),
+            find,
             content: content.clone(),
-            regex: cli.regex,
-            case_insensitive: cli.case_insensitive,
+            regex,
+            case_insensitive,
         }
     } else if let Some(ref content) = cli.before {
         Op::InsertBefore {
-            find: find.to_string(),
+            find,
             content: content.clone(),
-            regex: cli.regex,
-            case_insensitive: cli.case_insensitive,
+            regex,
+            case_insensitive,
         }
     } else if let Some(ref content) = cli.replace_line {
         Op::ReplaceLine {
-            find: find.to_string(),
+            find,
             content: content.clone(),
-            regex: cli.regex,
-            case_insensitive: cli.case_insensitive,
+            regex,
+            case_insensitive,
         }
     } else if let Some(mode) = cli.transform {
         Op::Transform {
-            find: find.to_string(),
+            find,
             mode,
-            regex: cli.regex,
-            case_insensitive: cli.case_insensitive,
+            regex,
+            case_insensitive,
         }
     } else if let Some(ref parts) = cli.surround {
         Op::Surround {
-            find: find.to_string(),
+            find,
             prefix: parts[0].clone(),
             suffix: parts[1].clone(),
-            regex: cli.regex,
-            case_insensitive: cli.case_insensitive,
+            regex,
+            case_insensitive,
         }
     } else if let Some(amount) = cli.indent {
         Op::Indent {
-            find: find.to_string(),
+            find,
             amount,
             use_tabs: false,
-            regex: cli.regex,
-            case_insensitive: cli.case_insensitive,
+            regex,
+            case_insensitive,
         }
     } else if let Some(amount) = cli.dedent {
         Op::Dedent {
-            find: find.to_string(),
+            find,
             amount,
-            regex: cli.regex,
-            case_insensitive: cli.case_insensitive,
+            use_tabs: false,
+            regex,
+            case_insensitive,
         }
     } else {
         Op::Replace {
-            find: find.to_string(),
+            find,
             replace: cli.replace.clone().unwrap_or_default(),
-            regex: cli.regex,
-            case_insensitive: cli.case_insensitive,
+            regex,
+            case_insensitive,
         }
     }
 }

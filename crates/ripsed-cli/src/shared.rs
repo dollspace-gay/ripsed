@@ -1,25 +1,45 @@
 use ripsed_core::config::Config;
 use ripsed_core::operation::OpOptions;
 use ripsed_core::undo::{UndoEntry, UndoLog, UndoRecord};
+use ripsed_fs::discovery::DiscoveryOptions;
 use std::path::{Path, PathBuf};
 
 use crate::args::Cli;
 
+/// Convert operation options into file discovery options.
+pub fn discovery_opts_from(opts: &OpOptions) -> DiscoveryOptions {
+    DiscoveryOptions {
+        root: opts
+            .root
+            .as_ref()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))),
+        glob: opts.glob.clone(),
+        ignore_pattern: opts.ignore.clone(),
+        gitignore: opts.gitignore,
+        hidden: opts.hidden,
+        max_depth: opts.max_depth,
+        follow_links: false,
+    }
+}
+
 /// Load configuration from --config path or auto-discover from cwd.
-pub fn load_config(cli: &Cli) -> Config {
+pub fn load_config(cli: &Cli) -> Result<Config, i32> {
     if let Some(ref path_str) = cli.config {
-        match Config::load(Path::new(path_str)) {
-            Ok(c) => c,
-            Err(e) => {
-                eprintln!("ripsed: {e}");
-                std::process::exit(1);
-            }
-        }
+        Config::load(Path::new(path_str)).map_err(|e| {
+            eprintln!("ripsed: {e}");
+            1
+        })
     } else {
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        Config::discover(&cwd)
-            .map(|(_path, config)| config)
-            .unwrap_or_default()
+        match Config::discover(&cwd) {
+            Ok(Some((_path, config))) => Ok(config),
+            Ok(None) => Ok(Config::default()),
+            Err(e) => {
+                eprintln!("ripsed: {e}");
+                Err(1)
+            }
+        }
     }
 }
 
@@ -97,5 +117,14 @@ pub fn save_undo_log(log: &UndoLog) {
             "ripsed: warning: cannot save undo log to {}: {e}",
             path.display()
         );
+        return;
+    }
+
+    // Restrict permissions — undo log may contain sensitive file contents
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o600);
+        let _ = std::fs::set_permissions(&path, perms);
     }
 }

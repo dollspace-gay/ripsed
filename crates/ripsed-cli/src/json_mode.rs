@@ -1,14 +1,16 @@
 use ripsed_core::config::Config;
 use ripsed_core::diff::Summary;
 use ripsed_core::engine;
+use ripsed_core::error::RipsedError;
 use ripsed_core::matcher::Matcher;
-use ripsed_fs::discovery::{DiscoveryOptions, discover_files};
+use ripsed_fs::discovery::discover_files;
 use ripsed_fs::reader;
 use ripsed_fs::writer;
 use ripsed_json::request::JsonRequest;
 use ripsed_json::response::{JsonResponse, UndoResponse, UndoSummary};
+use std::collections::HashMap;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::shared::{load_undo_log, record_undo, save_undo_log};
 
@@ -32,12 +34,22 @@ pub fn run_json_mode(input: &str, config: &Config, jsonl: bool) -> Result<(), i3
     let atomic = request.options.atomic;
     let backup = request.options.backup;
     let (ops, options) = request.into_ops();
-    let discovery_opts = DiscoveryOptions::from_op_options(&options);
-    let files = discover_files(&discovery_opts);
+    let discovery_opts = crate::shared::discovery_opts_from(&options);
+    let files = match discover_files(&discovery_opts) {
+        Ok(f) => f,
+        Err(e) => {
+            let response = JsonResponse::error(vec![RipsedError::internal_error(e.to_string())]);
+            println!("{}", response.to_json());
+            return Err(1);
+        }
+    };
 
     let mut summary = Summary::default();
     let mut results = Vec::new();
     let mut errors = Vec::new();
+
+    // Content cache: subsequent operations see the output of previous ones
+    let mut content_cache: HashMap<PathBuf, String> = HashMap::new();
 
     // For atomic batch mode, collect all writes to apply at once
     let mut pending_writes: Vec<(std::path::PathBuf, String)> = Vec::new();
@@ -84,21 +96,21 @@ pub fn run_json_mode(input: &str, config: &Config, jsonl: bool) -> Result<(), i3
                     }
                 }
             }
-            let content = match reader::read_file(file_path) {
-                Ok(c) => c,
-                Err(e) => {
-                    let path_str = file_path.to_string_lossy();
-                    if e.kind() == std::io::ErrorKind::PermissionDenied {
-                        errors.push(ripsed_core::error::RipsedError::permission_denied(
-                            &path_str,
-                        ));
-                    } else {
-                        errors.push(ripsed_core::error::RipsedError::write_failed(
-                            &path_str,
-                            &e.to_string(),
-                        ));
+            // Use cached content if a prior operation already modified this file
+            let content = if let Some(cached) = content_cache.get(file_path) {
+                cached.clone()
+            } else {
+                match reader::read_file(file_path) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        let path_str = file_path.to_string_lossy();
+                        if e.kind() == std::io::ErrorKind::PermissionDenied {
+                            errors.push(RipsedError::permission_denied(&path_str));
+                        } else {
+                            errors.push(RipsedError::write_failed(&path_str, &e.to_string()));
+                        }
+                        continue;
                     }
-                    continue;
                 }
             };
 
@@ -109,6 +121,11 @@ pub fn run_json_mode(input: &str, config: &Config, jsonl: bool) -> Result<(), i3
                     continue;
                 }
             };
+
+            // Update cache so subsequent operations see modified content
+            if let Some(ref text) = output.text {
+                content_cache.insert(file_path.clone(), text.clone());
+            }
 
             if !output.changes.is_empty() {
                 summary.files_matched += 1;
@@ -137,7 +154,13 @@ pub fn run_json_mode(input: &str, config: &Config, jsonl: bool) -> Result<(), i3
                         }
 
                         if backup {
-                            let _ = writer::create_backup(file_path);
+                            if let Err(e) = writer::create_backup(file_path) {
+                                errors.push(RipsedError::write_failed(
+                                    &file_path.to_string_lossy(),
+                                    &format!("backup failed: {e}"),
+                                ));
+                                continue;
+                            }
                         }
 
                         if atomic {
@@ -453,9 +476,10 @@ mod tests {
         let path_a = dir.path().join("a.txt");
         let path_b = dir.path().join("b.txt");
 
-        let mut pending: Vec<(std::path::PathBuf, String)> = Vec::new();
-        pending.push((path_a.clone(), "content_a".to_string()));
-        pending.push((path_b.clone(), "content_b".to_string()));
+        let pending: Vec<(std::path::PathBuf, String)> = vec![
+            (path_a.clone(), "content_a".to_string()),
+            (path_b.clone(), "content_b".to_string()),
+        ];
 
         let batch_refs: Vec<(&Path, &str)> = pending
             .iter()

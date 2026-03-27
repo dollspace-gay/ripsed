@@ -1,8 +1,16 @@
 use crate::reader;
 use ignore::WalkBuilder;
-use ripsed_core::operation::OpOptions;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+
+/// Convert an `ignore` crate error into an `io::Error`.
+fn glob_error(e: ignore::Error) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidInput,
+        format!("invalid glob pattern: {e}"),
+    )
+}
 
 /// Options for file discovery.
 pub struct DiscoveryOptions {
@@ -15,29 +23,25 @@ pub struct DiscoveryOptions {
     pub follow_links: bool,
 }
 
-impl DiscoveryOptions {
-    pub fn from_op_options(opts: &OpOptions) -> Self {
+impl Default for DiscoveryOptions {
+    fn default() -> Self {
         Self {
-            root: opts
-                .root
-                .as_ref()
-                .map(PathBuf::from)
-                .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))),
-            glob: opts.glob.clone(),
-            ignore_pattern: opts.ignore.clone(),
-            gitignore: opts.gitignore,
-            hidden: opts.hidden,
-            max_depth: opts.max_depth,
+            root: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            glob: None,
+            ignore_pattern: None,
+            gitignore: true,
+            hidden: false,
+            max_depth: None,
             follow_links: false,
         }
     }
 }
 
-/// Threshold at which `discover_files_auto` switches to the parallel walker.
-const PARALLEL_THRESHOLD: usize = 1000;
-
-/// Discover files to process based on options.
-pub fn discover_files(opts: &DiscoveryOptions) -> Vec<PathBuf> {
+/// Build a `WalkBuilder` with the shared configuration from `DiscoveryOptions`.
+///
+/// Both serial and parallel discovery call this so that gitignore, hidden,
+/// follow_links, max_depth, and glob overrides are configured in one place.
+fn configure_walk_builder(opts: &DiscoveryOptions) -> io::Result<WalkBuilder> {
     let mut builder = WalkBuilder::new(&opts.root);
     builder
         .git_ignore(opts.gitignore)
@@ -50,20 +54,24 @@ pub fn discover_files(opts: &DiscoveryOptions) -> Vec<PathBuf> {
         builder.max_depth(Some(depth));
     }
 
-    // Add glob filter
     if let Some(ref glob) = opts.glob {
-        // Use overrides for glob patterns
         let mut overrides = ignore::overrides::OverrideBuilder::new(&opts.root);
-        // The glob acts as an include filter
-        let _ = overrides.add(glob);
-        if let Ok(built) = overrides.build() {
-            builder.overrides(built);
-        }
+        overrides.add(glob).map_err(glob_error)?;
+        let built = overrides.build().map_err(glob_error)?;
+        builder.overrides(built);
     }
 
+    Ok(builder)
+}
+
+/// Discover files to process based on options.
+///
+/// Returns an error if the glob pattern is invalid.
+pub fn discover_files(opts: &DiscoveryOptions) -> io::Result<Vec<PathBuf>> {
+    let builder = configure_walk_builder(opts)?;
     let walker = builder.build();
 
-    walker
+    Ok(walker
         .filter_map(|entry| entry.ok())
         .filter(|entry| entry.file_type().is_some_and(|ft| ft.is_file()))
         .filter(|entry| {
@@ -80,35 +88,15 @@ pub fn discover_files(opts: &DiscoveryOptions) -> Vec<PathBuf> {
             }
         })
         .map(|entry| entry.into_path())
-        .collect()
+        .collect())
 }
 
 /// Discover files using WalkBuilder's parallel walker for large directories.
 ///
-/// This function uses `build_parallel()` from the `ignore` crate, which spawns
-/// multiple threads to walk the directory tree concurrently. The results are
-/// collected into a `Vec<PathBuf>` and sorted for deterministic output.
-pub fn discover_files_parallel(opts: &DiscoveryOptions) -> Vec<PathBuf> {
-    let mut builder = WalkBuilder::new(&opts.root);
-    builder
-        .git_ignore(opts.gitignore)
-        .git_global(opts.gitignore)
-        .git_exclude(opts.gitignore)
-        .hidden(!opts.hidden)
-        .follow_links(opts.follow_links)
-        .threads(rayon::current_num_threads().max(2));
-
-    if let Some(depth) = opts.max_depth {
-        builder.max_depth(Some(depth));
-    }
-
-    if let Some(ref glob) = opts.glob {
-        let mut overrides = ignore::overrides::OverrideBuilder::new(&opts.root);
-        let _ = overrides.add(glob);
-        if let Ok(built) = overrides.build() {
-            builder.overrides(built);
-        }
-    }
+/// Returns an error if the glob pattern is invalid.
+pub fn discover_files_parallel(opts: &DiscoveryOptions) -> io::Result<Vec<PathBuf>> {
+    let mut builder = configure_walk_builder(opts)?;
+    builder.threads(rayon::current_num_threads().max(2));
 
     let ignore_pattern = opts.ignore_pattern.clone();
     let results: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
@@ -147,29 +135,31 @@ pub fn discover_files_parallel(opts: &DiscoveryOptions) -> Vec<PathBuf> {
 
     let mut files = results.into_inner().unwrap();
     files.sort();
-    files
+    Ok(files)
 }
 
-/// Automatically choose serial or parallel discovery based on a heuristic.
+/// Strategy for choosing between serial and parallel file discovery.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WalkStrategy {
+    /// Automatically choose based on directory size heuristic.
+    Auto,
+    /// Always use the parallel walker.
+    ForceParallel,
+}
+
+/// Choose between serial and parallel file discovery.
 ///
-/// If `force_parallel` is `true`, always use the parallel walker. Otherwise,
-/// first do a quick count of directory entries; if the count exceeds
-/// [`PARALLEL_THRESHOLD`] (1 000), fall back to the parallel walker.
-pub fn discover_files_auto(opts: &DiscoveryOptions, force_parallel: bool) -> Vec<PathBuf> {
-    if force_parallel {
-        return discover_files_parallel(opts);
-    }
-
-    // Quick heuristic: count top-level entries to estimate tree size.
-    let entry_count = std::fs::read_dir(&opts.root)
-        .map(|rd| rd.count())
-        .unwrap_or(0);
-
-    if entry_count > PARALLEL_THRESHOLD {
-        discover_files_parallel(opts)
-    } else {
-        discover_files(opts)
-    }
+/// With [`WalkStrategy::Auto`], always uses the parallel walker — it has
+/// minimal overhead on small directories and avoids the unreliable top-level
+/// entry count heuristic that previously caused incorrect serial fallback
+/// on deep directory trees.
+///
+/// Returns an error if the glob pattern is invalid.
+pub fn discover_files_auto(
+    opts: &DiscoveryOptions,
+    _strategy: WalkStrategy,
+) -> io::Result<Vec<PathBuf>> {
+    discover_files_parallel(opts)
 }
 
 /// Simple glob matching (delegates to the `ignore` crate's globbing).
@@ -209,9 +199,9 @@ mod tests {
             follow_links: false,
         };
 
-        let mut serial = discover_files(&opts);
+        let mut serial = discover_files(&opts).unwrap();
         serial.sort();
-        let parallel = discover_files_parallel(&opts); // already sorted
+        let parallel = discover_files_parallel(&opts).unwrap();
 
         assert_eq!(serial, parallel);
     }
@@ -232,7 +222,7 @@ mod tests {
             follow_links: false,
         };
 
-        let files = discover_files_parallel(&opts);
+        let files = discover_files_parallel(&opts).unwrap();
         assert_eq!(files.len(), 1);
         assert!(files[0].ends_with("text.txt"));
     }
@@ -251,7 +241,7 @@ mod tests {
         };
 
         // Should not panic and should find all 5 files
-        let files = discover_files_auto(&opts, false);
+        let files = discover_files_auto(&opts, WalkStrategy::Auto).unwrap();
         assert_eq!(files.len(), 5);
     }
 
@@ -268,7 +258,7 @@ mod tests {
             follow_links: false,
         };
 
-        let files = discover_files_auto(&opts, true);
+        let files = discover_files_auto(&opts, WalkStrategy::ForceParallel).unwrap();
         assert_eq!(files.len(), 5);
     }
 
@@ -288,7 +278,7 @@ mod tests {
             follow_links: false,
         };
 
-        let files = discover_files_parallel(&opts);
+        let files = discover_files_parallel(&opts).unwrap();
         assert_eq!(files.len(), 1);
         assert!(files[0].ends_with("a.rs"));
     }
@@ -309,8 +299,44 @@ mod tests {
             follow_links: false,
         };
 
-        let files = discover_files_parallel(&opts);
+        let files = discover_files_parallel(&opts).unwrap();
         assert_eq!(files.len(), 1);
         assert!(files[0].ends_with("keep.txt"));
+    }
+
+    #[test]
+    fn invalid_glob_returns_error() {
+        let dir = make_tree(3);
+        let opts = DiscoveryOptions {
+            root: dir.path().to_path_buf(),
+            glob: Some("[invalid".to_string()),
+            ignore_pattern: None,
+            gitignore: false,
+            hidden: false,
+            max_depth: None,
+            follow_links: false,
+        };
+
+        assert!(discover_files(&opts).is_err());
+        assert!(discover_files_parallel(&opts).is_err());
+        assert!(discover_files_auto(&opts, WalkStrategy::Auto).is_err());
+    }
+
+    #[test]
+    fn valid_glob_returns_ok() {
+        let dir = make_tree(3);
+        let opts = DiscoveryOptions {
+            root: dir.path().to_path_buf(),
+            glob: Some("*.txt".to_string()),
+            ignore_pattern: None,
+            gitignore: false,
+            hidden: false,
+            max_depth: None,
+            follow_links: false,
+        };
+
+        assert!(discover_files(&opts).is_ok());
+        assert!(discover_files_parallel(&opts).is_ok());
+        assert!(discover_files_auto(&opts, WalkStrategy::Auto).is_ok());
     }
 }

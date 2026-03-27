@@ -15,11 +15,235 @@ pub struct EngineOutput {
     pub undo: Option<UndoEntry>,
 }
 
-/// Detect whether the text uses CRLF line endings.
+/// The result of applying a single operation to one line.
 ///
-/// Returns true if CRLF (`\r\n`) is found before any bare LF (`\n`).
+/// Each helper function returns this to tell the main loop what to do with
+/// the line and whether a change was recorded.
+enum LineAction {
+    /// Line is unchanged; push the original.
+    Unchanged,
+    /// Line was replaced by a new value; push `new_line` and record the change.
+    Replaced { new_line: String, change: Change },
+    /// Line was deleted; do NOT push anything, but record the change.
+    Deleted { change: Change },
+    /// A new line was inserted after the original; push both and record the change.
+    InsertedAfter { content: String, change: Change },
+    /// A new line was inserted before the original; push both and record the change.
+    InsertedBefore { content: String, change: Change },
+}
+
+/// Detect whether the text predominantly uses CRLF line endings.
+///
+/// Uses a majority-vote heuristic: counts CRLF (`\r\n`) vs bare LF (`\n`)
+/// occurrences and returns `true` only when CRLF is strictly more common.
+/// When counts are equal (including zero), prefers LF as the more portable
+/// default.  This prevents a file with mixed line endings from being
+/// silently normalized to all-CRLF.
 fn uses_crlf(text: &str) -> bool {
-    text.contains("\r\n")
+    let crlf_count = text.matches("\r\n").count();
+    let lf_count = text.matches('\n').count() - crlf_count;
+    crlf_count > lf_count
+}
+
+// ---------------------------------------------------------------------------
+// Per-operation helper functions
+//
+// Each helper inspects one line and returns a `LineAction` indicating what the
+// main `apply()` loop should do.  Keeping the logic in dedicated functions
+// makes it easy to add new `Op` variants without bloating `apply()`.
+// ---------------------------------------------------------------------------
+
+/// Shared context passed to each per-line operation helper.
+struct LineCtx<'a> {
+    line: &'a str,
+    line_num: usize,
+    matcher: &'a Matcher,
+    lines: &'a [&'a str],
+    idx: usize,
+    context_lines: usize,
+}
+
+impl LineCtx<'_> {
+    fn build_context(&self) -> ChangeContext {
+        build_context(self.lines, self.idx, self.context_lines)
+    }
+}
+
+/// Handle `Op::Replace` — substitute matched text within the line.
+fn apply_replace(cx: &LineCtx, replace: &str) -> LineAction {
+    if let Some(replaced) = cx.matcher.replace(cx.line, replace) {
+        LineAction::Replaced {
+            new_line: replaced.clone(),
+            change: Change {
+                line: cx.line_num,
+                before: cx.line.to_string(),
+                after: Some(replaced),
+                context: Some(cx.build_context()),
+            },
+        }
+    } else {
+        LineAction::Unchanged
+    }
+}
+
+/// Handle `Op::Delete` — remove the line entirely if matched.
+fn apply_delete(cx: &LineCtx) -> LineAction {
+    if cx.matcher.is_match(cx.line) {
+        LineAction::Deleted {
+            change: Change {
+                line: cx.line_num,
+                before: cx.line.to_string(),
+                after: None,
+                context: Some(cx.build_context()),
+            },
+        }
+    } else {
+        LineAction::Unchanged
+    }
+}
+
+/// Handle `Op::InsertAfter` — insert new content after a matched line.
+fn apply_insert_after(cx: &LineCtx, content: &str) -> LineAction {
+    if cx.matcher.is_match(cx.line) {
+        LineAction::InsertedAfter {
+            content: content.to_string(),
+            change: Change {
+                line: cx.line_num,
+                before: cx.line.to_string(),
+                after: Some(format!("{}\n{content}", cx.line)),
+                context: Some(cx.build_context()),
+            },
+        }
+    } else {
+        LineAction::Unchanged
+    }
+}
+
+/// Handle `Op::InsertBefore` — insert new content before a matched line.
+fn apply_insert_before(cx: &LineCtx, content: &str) -> LineAction {
+    if cx.matcher.is_match(cx.line) {
+        LineAction::InsertedBefore {
+            content: content.to_string(),
+            change: Change {
+                line: cx.line_num,
+                before: cx.line.to_string(),
+                after: Some(format!("{content}\n{}", cx.line)),
+                context: Some(cx.build_context()),
+            },
+        }
+    } else {
+        LineAction::Unchanged
+    }
+}
+
+/// Handle `Op::ReplaceLine` — replace the entire line with new content.
+fn apply_replace_line(cx: &LineCtx, content: &str) -> LineAction {
+    if cx.matcher.is_match(cx.line) {
+        LineAction::Replaced {
+            new_line: content.to_string(),
+            change: Change {
+                line: cx.line_num,
+                before: cx.line.to_string(),
+                after: Some(content.to_string()),
+                context: Some(cx.build_context()),
+            },
+        }
+    } else {
+        LineAction::Unchanged
+    }
+}
+
+/// Handle `Op::Transform` — apply a case/naming transformation to matched text.
+fn apply_transform_op(cx: &LineCtx, mode: TransformMode) -> LineAction {
+    if cx.matcher.is_match(cx.line) {
+        let new_line = apply_transform(cx.line, cx.matcher, mode);
+        if new_line != cx.line {
+            LineAction::Replaced {
+                new_line: new_line.clone(),
+                change: Change {
+                    line: cx.line_num,
+                    before: cx.line.to_string(),
+                    after: Some(new_line),
+                    context: Some(cx.build_context()),
+                },
+            }
+        } else {
+            LineAction::Unchanged
+        }
+    } else {
+        LineAction::Unchanged
+    }
+}
+
+/// Handle `Op::Surround` — wrap matched lines with a prefix and suffix.
+fn apply_surround(cx: &LineCtx, prefix: &str, suffix: &str) -> LineAction {
+    if cx.matcher.is_match(cx.line) {
+        let new_line = format!("{prefix}{}{suffix}", cx.line);
+        if new_line != cx.line {
+            LineAction::Replaced {
+                new_line: new_line.clone(),
+                change: Change {
+                    line: cx.line_num,
+                    before: cx.line.to_string(),
+                    after: Some(new_line),
+                    context: Some(cx.build_context()),
+                },
+            }
+        } else {
+            LineAction::Unchanged
+        }
+    } else {
+        LineAction::Unchanged
+    }
+}
+
+/// Handle `Op::Indent` — prepend whitespace to matched lines.
+fn apply_indent(cx: &LineCtx, amount: usize, use_tabs: bool) -> LineAction {
+    if cx.matcher.is_match(cx.line) {
+        let indent = if use_tabs {
+            "\t".repeat(amount)
+        } else {
+            " ".repeat(amount)
+        };
+        let new_line = format!("{indent}{}", cx.line);
+        if new_line != cx.line {
+            LineAction::Replaced {
+                new_line: new_line.clone(),
+                change: Change {
+                    line: cx.line_num,
+                    before: cx.line.to_string(),
+                    after: Some(new_line),
+                    context: Some(cx.build_context()),
+                },
+            }
+        } else {
+            LineAction::Unchanged
+        }
+    } else {
+        LineAction::Unchanged
+    }
+}
+
+/// Handle `Op::Dedent` — remove leading whitespace from matched lines.
+fn apply_dedent(cx: &LineCtx, amount: usize, use_tabs: bool) -> LineAction {
+    if cx.matcher.is_match(cx.line) {
+        let new_line = dedent_line(cx.line, amount, use_tabs);
+        if new_line != cx.line {
+            LineAction::Replaced {
+                new_line: new_line.clone(),
+                change: Change {
+                    line: cx.line_num,
+                    before: cx.line.to_string(),
+                    after: Some(new_line),
+                    context: Some(cx.build_context()),
+                },
+            }
+        } else {
+            LineAction::Unchanged
+        }
+    } else {
+        LineAction::Unchanged
+    }
 }
 
 /// Apply a single operation to a text buffer.
@@ -49,149 +273,52 @@ pub fn apply(
             }
         }
 
-        match op {
-            Op::Replace { replace, .. } => {
-                if let Some(replaced) = matcher.replace(line, replace) {
-                    let ctx = build_context(&lines, idx, context_lines);
-                    changes.push(Change {
-                        line: line_num,
-                        before: line.to_string(),
-                        after: Some(replaced.clone()),
-                        context: Some(ctx),
-                    });
-                    result_lines.push(replaced);
-                } else {
-                    result_lines.push(line.to_string());
-                }
-            }
-            Op::Delete { .. } => {
-                if matcher.is_match(line) {
-                    let ctx = build_context(&lines, idx, context_lines);
-                    changes.push(Change {
-                        line: line_num,
-                        before: line.to_string(),
-                        after: None,
-                        context: Some(ctx),
-                    });
-                    // Don't push — line is deleted
-                } else {
-                    result_lines.push(line.to_string());
-                }
-            }
-            Op::InsertAfter { content, .. } => {
-                result_lines.push(line.to_string());
-                if matcher.is_match(line) {
-                    let ctx = build_context(&lines, idx, context_lines);
-                    changes.push(Change {
-                        line: line_num,
-                        before: line.to_string(),
-                        after: Some(format!("{line}\n{content}")),
-                        context: Some(ctx),
-                    });
-                    result_lines.push(content.clone());
-                }
-            }
-            Op::InsertBefore { content, .. } => {
-                if matcher.is_match(line) {
-                    let ctx = build_context(&lines, idx, context_lines);
-                    changes.push(Change {
-                        line: line_num,
-                        before: line.to_string(),
-                        after: Some(format!("{content}\n{line}")),
-                        context: Some(ctx),
-                    });
-                    result_lines.push(content.clone());
-                }
-                result_lines.push(line.to_string());
-            }
-            Op::ReplaceLine { content, .. } => {
-                if matcher.is_match(line) {
-                    let ctx = build_context(&lines, idx, context_lines);
-                    changes.push(Change {
-                        line: line_num,
-                        before: line.to_string(),
-                        after: Some(content.clone()),
-                        context: Some(ctx),
-                    });
-                    result_lines.push(content.clone());
-                } else {
-                    result_lines.push(line.to_string());
-                }
-            }
-            Op::Transform { mode, .. } => {
-                if matcher.is_match(line) {
-                    let new_line = apply_transform(line, matcher, *mode);
-                    if new_line != line {
-                        let ctx = build_context(&lines, idx, context_lines);
-                        changes.push(Change {
-                            line: line_num,
-                            before: line.to_string(),
-                            after: Some(new_line.clone()),
-                            context: Some(ctx),
-                        });
-                        result_lines.push(new_line);
-                    } else {
-                        result_lines.push(line.to_string());
-                    }
-                } else {
-                    result_lines.push(line.to_string());
-                }
-            }
-            Op::Surround { prefix, suffix, .. } => {
-                if matcher.is_match(line) {
-                    let new_line = format!("{prefix}{line}{suffix}");
-                    let ctx = build_context(&lines, idx, context_lines);
-                    changes.push(Change {
-                        line: line_num,
-                        before: line.to_string(),
-                        after: Some(new_line.clone()),
-                        context: Some(ctx),
-                    });
-                    result_lines.push(new_line);
-                } else {
-                    result_lines.push(line.to_string());
-                }
-            }
+        let cx = LineCtx {
+            line,
+            line_num,
+            matcher,
+            lines: &lines,
+            idx,
+            context_lines,
+        };
+
+        let action = match op {
+            Op::Replace { replace, .. } => apply_replace(&cx, replace),
+            Op::Delete { .. } => apply_delete(&cx),
+            Op::InsertAfter { content, .. } => apply_insert_after(&cx, content),
+            Op::InsertBefore { content, .. } => apply_insert_before(&cx, content),
+            Op::ReplaceLine { content, .. } => apply_replace_line(&cx, content),
+            Op::Transform { mode, .. } => apply_transform_op(&cx, *mode),
+            Op::Surround { prefix, suffix, .. } => apply_surround(&cx, prefix, suffix),
             Op::Indent {
                 amount, use_tabs, ..
-            } => {
-                if matcher.is_match(line) {
-                    let indent = if *use_tabs {
-                        "\t".repeat(*amount)
-                    } else {
-                        " ".repeat(*amount)
-                    };
-                    let new_line = format!("{indent}{line}");
-                    let ctx = build_context(&lines, idx, context_lines);
-                    changes.push(Change {
-                        line: line_num,
-                        before: line.to_string(),
-                        after: Some(new_line.clone()),
-                        context: Some(ctx),
-                    });
-                    result_lines.push(new_line);
-                } else {
-                    result_lines.push(line.to_string());
-                }
+            } => apply_indent(&cx, *amount, *use_tabs),
+            Op::Dedent {
+                amount, use_tabs, ..
+            } => apply_dedent(&cx, *amount, *use_tabs),
+        };
+
+        match action {
+            LineAction::Unchanged => {
+                result_lines.push(line.to_string());
             }
-            Op::Dedent { amount, .. } => {
-                if matcher.is_match(line) {
-                    let new_line = dedent_line(line, *amount);
-                    if new_line != line {
-                        let ctx = build_context(&lines, idx, context_lines);
-                        changes.push(Change {
-                            line: line_num,
-                            before: line.to_string(),
-                            after: Some(new_line.clone()),
-                            context: Some(ctx),
-                        });
-                        result_lines.push(new_line);
-                    } else {
-                        result_lines.push(line.to_string());
-                    }
-                } else {
-                    result_lines.push(line.to_string());
-                }
+            LineAction::Replaced { new_line, change } => {
+                changes.push(change);
+                result_lines.push(new_line);
+            }
+            LineAction::Deleted { change } => {
+                changes.push(change);
+                // Don't push — line is deleted
+            }
+            LineAction::InsertedAfter { content, change } => {
+                result_lines.push(line.to_string());
+                changes.push(change);
+                result_lines.push(content);
+            }
+            LineAction::InsertedBefore { content, change } => {
+                changes.push(change);
+                result_lines.push(content);
+                result_lines.push(line.to_string());
             }
         }
     }
@@ -310,10 +437,12 @@ fn transform_text(text: &str, mode: TransformMode) -> String {
     }
 }
 
-/// Remove up to `amount` leading spaces from a line.
-fn dedent_line(line: &str, amount: usize) -> String {
-    let leading_spaces = line.len() - line.trim_start_matches(' ').len();
-    let remove = leading_spaces.min(amount);
+/// Remove up to `amount` leading whitespace characters from a line.
+/// When `use_tabs` is true, strips leading tabs; otherwise strips leading spaces.
+fn dedent_line(line: &str, amount: usize, use_tabs: bool) -> String {
+    let ch = if use_tabs { '\t' } else { ' ' };
+    let leading = line.len() - line.trim_start_matches(ch).len();
+    let remove = leading.min(amount);
     line[remove..].to_string()
 }
 
@@ -1094,11 +1223,9 @@ mod tests {
         };
         let matcher = Matcher::new(&op).unwrap();
         let result = apply(text, &op, &matcher, None, 0).unwrap();
-        // Surround always records a change when is_match is true, even if
-        // prefix and suffix are empty (the new_line equals the original).
-        assert!(result.text.is_some());
-        let output = result.text.unwrap();
-        assert_eq!(output, "hello world\n");
+        // Surround with empty prefix and suffix is a no-op — no change recorded.
+        assert!(result.text.is_none());
+        assert!(result.changes.is_empty());
     }
 
     // ---------------------------------------------------------------
@@ -1199,11 +1326,9 @@ mod tests {
         };
         let matcher = Matcher::new(&op).unwrap();
         let result = apply(text, &op, &matcher, None, 0).unwrap();
-        // Indent by 0 means prepend "" which produces the same line,
-        // but the engine still records it as a change because it always
-        // pushes when is_match is true for Indent.
-        assert!(result.text.is_some());
-        assert_eq!(result.text.unwrap(), "hello\n");
+        // Indent by 0 is a no-op — no change recorded.
+        assert!(result.text.is_none());
+        assert!(result.changes.is_empty());
     }
 
     #[test]
@@ -1283,6 +1408,7 @@ mod tests {
         let op = Op::Dedent {
             find: "hello".to_string(),
             amount: 4,
+            use_tabs: false,
             regex: false,
             case_insensitive: false,
         };
@@ -1299,6 +1425,7 @@ mod tests {
         let op = Op::Dedent {
             find: "hello".to_string(),
             amount: 4,
+            use_tabs: false,
             regex: false,
             case_insensitive: false,
         };
@@ -1314,6 +1441,7 @@ mod tests {
         let op = Op::Dedent {
             find: "hello".to_string(),
             amount: 4,
+            use_tabs: false,
             regex: false,
             case_insensitive: false,
         };
@@ -1330,6 +1458,7 @@ mod tests {
         let op = Op::Dedent {
             find: "foo".to_string(),
             amount: 4,
+            use_tabs: false,
             regex: false,
             case_insensitive: false,
         };
@@ -1348,6 +1477,7 @@ mod tests {
         let op = Op::Dedent {
             find: "zzz".to_string(),
             amount: 4,
+            use_tabs: false,
             regex: false,
             case_insensitive: false,
         };
@@ -1363,6 +1493,7 @@ mod tests {
         let op = Op::Dedent {
             find: "anything".to_string(),
             amount: 4,
+            use_tabs: false,
             regex: false,
             case_insensitive: false,
         };
@@ -1378,6 +1509,7 @@ mod tests {
         let op = Op::Dedent {
             find: r"let\s+".to_string(),
             amount: 4,
+            use_tabs: false,
             regex: true,
             case_insensitive: false,
         };
@@ -1393,6 +1525,7 @@ mod tests {
         let op = Op::Dedent {
             find: "hello".to_string(),
             amount: 2,
+            use_tabs: false,
             regex: false,
             case_insensitive: true,
         };
@@ -1408,6 +1541,7 @@ mod tests {
         let op = Op::Dedent {
             find: "hello".to_string(),
             amount: 4,
+            use_tabs: false,
             regex: false,
             case_insensitive: false,
         };
@@ -1422,6 +1556,7 @@ mod tests {
         let op = Op::Dedent {
             find: "foo".to_string(),
             amount: 4,
+            use_tabs: false,
             regex: false,
             case_insensitive: false,
         };
@@ -1442,6 +1577,7 @@ mod tests {
         let op = Op::Dedent {
             find: "hello".to_string(),
             amount: 4,
+            use_tabs: false,
             regex: false,
             case_insensitive: false,
         };
@@ -1477,6 +1613,7 @@ mod tests {
         let dedent_op = Op::Dedent {
             find: "hello".to_string(),
             amount: 4,
+            use_tabs: false,
             regex: false,
             case_insensitive: false,
         };
@@ -1539,6 +1676,7 @@ mod tests {
         let op = Op::Dedent {
             find: "hello".to_string(),
             amount: 4,
+            use_tabs: false,
             regex: false,
             case_insensitive: false,
         };
@@ -1604,6 +1742,7 @@ mod tests {
         let op = Op::Dedent {
             find: "hello".to_string(),
             amount: 4,
+            use_tabs: false,
             regex: false,
             case_insensitive: false,
         };
@@ -1758,6 +1897,7 @@ mod proptests {
             let dedent_op = Op::Dedent {
                 find: find.clone(),
                 amount,
+                use_tabs: false,
                 regex: false,
                 case_insensitive: false,
             };

@@ -35,7 +35,7 @@ pub struct UndoRequest {
 }
 
 fn default_version() -> String {
-    "1".to_string()
+    crate::schema::CURRENT_VERSION.to_string()
 }
 
 impl JsonRequest {
@@ -54,10 +54,17 @@ impl JsonRequest {
 
     /// Validate the request after parsing.
     fn validate(&self) -> Result<(), RipsedError> {
-        if self.version != "1" {
+        if !crate::schema::is_supported_version(&self.version) {
             return Err(RipsedError::invalid_request(
-                format!("Unknown version '{}'. Supported versions: 1", self.version),
-                "Set \"version\": \"1\" in your request.",
+                format!(
+                    "Unknown version '{}'. Supported versions: {}",
+                    self.version,
+                    crate::schema::SUPPORTED_VERSIONS.join(", ")
+                ),
+                format!(
+                    "Set \"version\": \"{}\" in your request.",
+                    crate::schema::CURRENT_VERSION
+                ),
             ));
         }
 
@@ -142,20 +149,14 @@ impl JsonRequest {
 /// Validate a single operation's fields.
 fn validate_op(index: usize, op: &Op) -> Result<(), RipsedError> {
     match op {
-        Op::Replace {
-            find,
-            replace,
-            regex,
-            ..
-        } => {
+        // Note: an empty replacement is valid (it deletes the matched text)
+        Op::Replace { find, regex, .. } => {
             if find.is_empty() {
                 return Err(RipsedError::invalid_request(
                     format!("Operation {index}: 'find' must not be empty for replace."),
                     format!("Set a non-empty 'find' pattern in operation {index}."),
                 ));
             }
-            // An empty replacement is valid (it deletes the matched text)
-            let _ = replace;
             if *regex {
                 validate_regex(index, find)?;
             }

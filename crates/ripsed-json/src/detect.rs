@@ -39,14 +39,14 @@ pub fn detect_stdin(stdin: &mut impl Read) -> io::Result<InputMode> {
 }
 
 /// Check if a JSON string looks like a ripsed request (has "operations" key).
+///
+/// This is a lightweight heuristic check — it does NOT fully parse the JSON.
+/// Full validation happens later in `JsonRequest::parse`, so a false positive
+/// here is harmless (it will be caught downstream), while avoiding the cost
+/// of double-deserializing valid requests.
 fn is_ripsed_json(text: &str) -> bool {
-    // Quick check: does it contain the "operations" key?
-    // We parse it to validate it's actually valid JSON with that key.
-    if let Ok(value) = serde_json::from_str::<serde_json::Value>(text) {
-        value.get("operations").is_some()
-    } else {
-        false
-    }
+    let trimmed = text.trim_start();
+    trimmed.starts_with('{') && trimmed.contains("\"operations\"")
 }
 
 /// Detect input mode from a buffered reader (for streaming stdin).
