@@ -1,0 +1,10 @@
+{
+  "uuid": "a93f98e7-f260-4459-a0cd-fc756e80e06e",
+  "display_id": 68,
+  "title": "Fix lock staleness detection breaking acquire_twice and timeout tests",
+  "status": "open",
+  "priority": "high",
+  "created_by": "anon-59ff128d",
+  "created_at": "2026-03-27T18:20:43.240289753Z",
+  "updated_at": "2026-03-27T18:20:43.240289753Z"
+}
