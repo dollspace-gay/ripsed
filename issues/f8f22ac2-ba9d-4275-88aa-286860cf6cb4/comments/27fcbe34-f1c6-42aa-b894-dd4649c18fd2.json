@@ -1,0 +1,8 @@
+{
+  "uuid": "27fcbe34-f1c6-42aa-b894-dd4649c18fd2",
+  "issue_uuid": "f8f22ac2-ba9d-4275-88aa-286860cf6cb4",
+  "author": "anon-59ff128d",
+  "content": "Extracted find/regex/case_insensitive into local bindings at top of function. Reduced each arm to a single line. All 177 CLI tests pass.",
+  "created_at": "2026-03-27T17:23:55.162308961Z",
+  "kind": "result"
+}
