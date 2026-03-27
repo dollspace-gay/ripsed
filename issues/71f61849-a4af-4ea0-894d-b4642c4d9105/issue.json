@@ -1,0 +1,10 @@
+{
+  "uuid": "71f61849-a4af-4ea0-894d-b4642c4d9105",
+  "display_id": 46,
+  "title": "Remove unused proptest dev-dependency from ripsed-fs",
+  "status": "open",
+  "priority": "low",
+  "created_by": "anon-59ff128d",
+  "created_at": "2026-03-27T13:19:01.076191358Z",
+  "updated_at": "2026-03-27T13:19:01.076191358Z"
+}
