@@ -1,0 +1,8 @@
+{
+  "uuid": "72cc3546-0d36-4882-a163-d050537a9b3c",
+  "issue_uuid": "daadafec-a50d-4e1f-b1e1-1952f09c89d2",
+  "author": "anon-59ff128d",
+  "content": "Removed ripsed-core dependency from ripsed-fs entirely. Moved from_op_options conversion to CLI shared.rs as discovery_opts_from(). Removed ripsed-core from ripsed-fs/Cargo.toml. Full test suite passes (504 tests).",
+  "created_at": "2026-03-27T17:27:23.438998385Z",
+  "kind": "result"
+}
