@@ -1,0 +1,8 @@
+{
+  "uuid": "862db9ee-3ecc-4bab-a20e-c2960eaca3c2",
+  "issue_uuid": "49b1b8c3-e200-4f86-8705-9ce0f33cab90",
+  "author": "anon-59ff128d",
+  "content": "Bumping workspace version from 0.2.3 to 0.2.4 in root Cargo.toml.",
+  "created_at": "2026-03-27T18:10:12.366929879Z",
+  "kind": "plan"
+}
