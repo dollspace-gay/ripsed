@@ -1,0 +1,8 @@
+{
+  "uuid": "a4f48d48-0408-4042-9b88-63799bd84313",
+  "issue_uuid": "9d37a7ee-f72b-4374-a2a4-463de753013a",
+  "author": "anon-59ff128d",
+  "content": "The undo log must store original file contents to enable restoration — this is a design requirement (confirmed by user). The clone in engine.rs is necessary since the text is borrowed. Marking as wontfix — the memory cost is inherent to the undo feature.",
+  "created_at": "2026-03-27T17:22:45.745359360Z",
+  "kind": "decision"
+}
