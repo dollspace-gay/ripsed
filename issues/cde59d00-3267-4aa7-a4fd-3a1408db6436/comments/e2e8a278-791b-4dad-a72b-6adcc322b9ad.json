@@ -1,0 +1,8 @@
+{
+  "uuid": "e2e8a278-791b-4dad-a72b-6adcc322b9ad",
+  "issue_uuid": "cde59d00-3267-4aa7-a4fd-3a1408db6436",
+  "author": "anon-59ff128d",
+  "content": "Replaced unreliable top-level entry count heuristic with always-parallel. Parallel walker has minimal overhead on small dirs and correctly handles deep trees. Removed unused PARALLEL_THRESHOLD constant. 33/33 fs tests pass.",
+  "created_at": "2026-03-27T17:22:07.142167624Z",
+  "kind": "result"
+}
