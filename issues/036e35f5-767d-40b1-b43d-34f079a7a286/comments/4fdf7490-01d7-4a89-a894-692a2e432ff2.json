@@ -1,0 +1,8 @@
+{
+  "uuid": "4fdf7490-01d7-4a89-a894-692a2e432ff2",
+  "issue_uuid": "036e35f5-767d-40b1-b43d-34f079a7a286",
+  "author": "anon-59ff128d",
+  "content": "Changed wildcard _ => {} to return an explicit error for unsupported Op variants. The #[non_exhaustive] attribute on Op requires the wildcard arm, but now it rejects unknown variants with a clear error instead of silently accepting them. All 68 tests pass.",
+  "created_at": "2026-03-27T16:44:03.745312854Z",
+  "kind": "result"
+}
