@@ -1,0 +1,8 @@
+{
+  "uuid": "a244b963-4371-44b8-80ee-febd5b16f041",
+  "issue_uuid": "df468f41-984e-46dd-a669-cea06640a03e",
+  "author": "anon-59ff128d",
+  "content": "Refactoring the Cli struct into sub-structs would require clap flatten attributes and would break all callers that access cli.field. This is a large API change with high regression risk and marginal benefit — clap already groups flags visually in --help. Deferring to a future major version.",
+  "created_at": "2026-03-27T17:28:25.384446205Z",
+  "kind": "decision"
+}
