@@ -1,0 +1,8 @@
+{
+  "uuid": "d41d4f4b-2759-4984-b194-546f5311330b",
+  "issue_uuid": "d7e4628d-7d55-4552-8942-97af44bed0a6",
+  "author": "anon-59ff128d",
+  "content": "Adding new_line != line guards to Surround and Indent arms, matching the pattern already used by Transform and Dedent.",
+  "created_at": "2026-03-27T16:49:54.338996430Z",
+  "kind": "plan"
+}
