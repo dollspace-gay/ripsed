@@ -1,0 +1,8 @@
+{
+  "uuid": "8a0fe651-69fa-4b85-ab99-2a3015bf9cc3",
+  "issue_uuid": "3ec61aac-5042-4018-aadd-7fd7d25a03c6",
+  "author": "anon-59ff128d",
+  "content": "Lock files now contain PID and Unix timestamp. Added is_lock_stale() which reads PID and checks /proc/{pid} on Unix. acquire() auto-cleans stale locks before attempting creation. Empty lock files (from older versions) treated as stale. Non-Unix conservatively assumes alive. All 30 ripsed-fs tests pass.",
+  "created_at": "2026-03-27T16:49:11.259093066Z",
+  "kind": "result"
+}
