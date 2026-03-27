@@ -1,0 +1,8 @@
+{
+  "uuid": "914619fe-53f2-467a-8c69-8230863c2a7d",
+  "issue_uuid": "cacad633-7359-4846-a65c-2e8c2fa43e89",
+  "author": "anon-59ff128d",
+  "content": "Added WalkStrategy enum {Auto, ForceParallel}. Updated discover_files_auto signature and all 6 callers (4 tests, file_mode, script_mode). Full test suite passes.",
+  "created_at": "2026-03-27T17:18:19.051169805Z",
+  "kind": "result"
+}
