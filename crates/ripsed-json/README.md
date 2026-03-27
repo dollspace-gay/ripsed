@@ -4,9 +4,10 @@ Agent/JSON interface for [ripsed](https://github.com/dollspace-gay/ripsed) — a
 
 This crate provides the structured JSON protocol for AI coding agents, editor plugins, and automation pipelines:
 
-- **Request parsing** — versioned JSON request schema with validation and helpful error messages
+- **Request parsing** — versioned JSON request schema with validation, size limits (64 MiB), and helpful error messages
 - **Response building** — structured JSON responses with per-file diffs, change counts, and error details
 - **Auto-detection** — determine whether stdin contains JSON or plain text for seamless mode switching
+- **Schema versioning** — protocol version management with forward-compatible validation
 - **Undo protocol** — JSON interface for undo operations
 
 ## Example request

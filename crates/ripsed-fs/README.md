@@ -4,11 +4,11 @@ File system layer for [ripsed](https://github.com/dollspace-gay/ripsed) — a fa
 
 This crate handles all file I/O:
 
-- **File discovery** — recursive directory walking with `.gitignore` support, glob filtering, and auto-switching between serial and parallel walkers
+- **File discovery** — recursive parallel directory walking with `.gitignore` support and glob filtering
 - **Reading** — UTF-8 file reading with memory-mapped I/O for large files and binary detection
 - **Atomic writes** — safe file writes via temp file + rename, with batch mode for all-or-nothing semantics
 - **Backups** — `.ripsed.bak` file creation with numbered suffixes
-- **File locking** — advisory locks to prevent concurrent modification
+- **File locking** — advisory locks with PID-based staleness detection
 
 ## License
 

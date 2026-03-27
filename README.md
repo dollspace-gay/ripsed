@@ -88,7 +88,7 @@ OPTIONS:
         --max-depth <N>      Maximum directory recursion depth
     -c, --count              Print count of matches only
     -q, --quiet              Suppress all non-error output
-        --confirm            Interactive confirmation before each change
+        --confirm            Interactive confirmation before each file
         --undo [N]           Undo the last N operations (default: 1)
         --undo-list          Show recent undo log entries
         --follow             Follow symbolic links during discovery
@@ -96,7 +96,7 @@ OPTIONS:
         --transform <MODE>   Transform matched text (upper, lower, title, snake_case, camel_case)
         --surround <P> <S>   Surround matching lines with prefix and suffix
         --indent <N>         Indent matching lines by N spaces
-        --dedent <N>         Remove up to N leading spaces from matching lines
+        --dedent <N>         Remove up to N leading whitespace chars from matching lines
         --script <PATH>      Run operations from a .rip script file
     -j, --json               Enable agent/JSON mode
         --jsonl              Stream results as JSON Lines
@@ -183,7 +183,7 @@ EOF
 | Transform | `transform` | `--transform MODE` | Change case of matched text |
 | Surround | `surround` | `--surround P S` | Wrap matching lines with prefix/suffix |
 | Indent | `indent` | `--indent N` | Add N spaces before matching lines |
-| Dedent | `dedent` | `--dedent N` | Remove up to N leading spaces from matching lines |
+| Dedent | `dedent` | `--dedent N` | Remove up to N leading whitespace chars from matching lines |
 
 ### Error Handling
 

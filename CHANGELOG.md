@@ -5,32 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.3] - 2026-03-26
+## [0.2.5] - 2026-03-27
 
 ### Security
-- Improve unsafe mmap safety argument and add concurrent modification guard (#35)
+- Add input size limits (64 MiB) to stdin and JSON deserialization (#14)
 - Set restrictive file permissions (0600) on undo log writes (#65)
-- Add input size limits to stdin and JSON deserialization (#14)
+- Improve unsafe mmap safety argument and document invariants (#35)
 
 ### Fixed
-- Fix lock staleness detection breaking acquire_twice and timeout tests (#68)
-- Fix formatting and clippy warnings across all crates (#66)
-- Fix parallel discovery heuristic only counting top-level entries (#38)
-- Fix detect_buffered partial-buffer edge case with fill_buf peek (#44)
-- Replace TOCTOU exists+read pair with single read in AtomicBatch::commit (#48)
-- Fix hardcoded operation index 0 in Matcher::new error context (#57)
-- Use schema::is_supported_version in request validation instead of hardcoded check (#54)
-- Use schema::CURRENT_VERSION constant instead of hardcoded version strings (#53)
-- Fix lock_path_for producing double-dot for extensionless files (#45)
-- Bump crate versions for JSON mode backup fix (#21)
-- Propagate Config::discover errors instead of silently returning None (#32)
-- Fix spurious change recording for no-op Surround and Indent operations (#29)
-- Fix silent acceptance of invalid glob patterns in file discovery (#13)
-- Fix uses_crlf normalizing mixed line-ending files to all CRLF (#17)
-- Fix JSON mode re-reading files per operation instead of composing results (#16)
 - Fix --confirm flag applying all changes regardless of per-change user response (#12)
+- Fix silent acceptance of invalid glob patterns in file discovery (#13)
 - Fix silent backup failure in JSON mode causing potential data loss (#15)
-- Add missing JSON mode tests for undo, config, gitignore, and atomic write test files (#20)
+- Fix JSON mode re-reading files per operation instead of composing results (#16)
+- Fix uses_crlf normalizing mixed line-ending files to all CRLF (#17)
+- Fix Dedent not handling tabs, breaking round-trip with tab Indent (#21)
+- Fix spurious change recording for no-op Surround and Indent operations (#29)
+- Propagate Config::discover errors instead of silently returning None (#32)
+- Fix parallel discovery heuristic — always use parallel walker (#38)
+- Fix detect_buffered partial-buffer edge case (#44)
+- Fix lock_path_for producing double-dot for extensionless files (#45)
+- Replace TOCTOU exists+read pair with single read in AtomicBatch::commit (#48)
+- Use schema::CURRENT_VERSION constant instead of hardcoded strings (#53, #54)
+- Fix hardcoded operation index 0 in Matcher::new error context (#57)
+- Fix lock file PID not flushed before staleness check (#68)
+- Reject unknown Op variants in validate_op instead of silent accept (#20)
+
+### Added
+- Add PID and staleness detection to file lock mechanism (#19)
+- Add WalkStrategy enum replacing boolean force_parallel parameter (#37)
+- Add Default impl for DiscoveryOptions (#36)
+- Add test coverage for mmap code path and detect_buffered (#47, #55)
+- Extract shared test helpers into common module in CLI tests (#61)
+
+### Changed
+- Remove ripsed-core dependency from ripsed-fs (dependency inversion fix) (#40)
+- Extract engine apply() match arms into LineCtx-based helpers (#30)
+- Deduplicate WalkBuilder configuration into shared helper (#39)
+- Deduplicate file-processing logic between file_mode and script_mode (#25)
+- Extract mode resolution from run() into Mode enum dispatch (#24, #27)
+- Extract repetitive validate_op arms into shared validation helper (#42)
+- Eliminate double JSON deserialization in detect_stdin path (#43)
+- Replace process::exit in load_config with Result return (#23)
+- Deduplicate default_true helper into crate-level function (#56)
+- Remove dead code: Matcher::Literal case_insensitive field, rollback wrapper, unused proptest dep (#58, #49, #46, #52)
+- Change pub mod to mod for internal CLI modules (#64)
+- Replace unwrap_or_else serialization fallback with expect (#51)
+- cargo fmt + clippy -D warnings clean (#66)
+
+## [0.2.3] - 2026-03-26
+
+### Fixed
 - Fix crosslink cache files tracked in git blocking crate publish (#11)
 - Fix Unicode byte-offset mismatch in case-insensitive literal matching (#1)
 - Fix non-atomic batch commit in AtomicBatch::commit (#2)
@@ -48,30 +72,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.0] - 2026-03-01
 
 ### Added
-- Bump crate versions to 0.2.4 (#67)
-- Extract shared test helpers into common module in ripsed-cli tests (#61)
-- Deduplicate shared file-processing logic between file_mode and script_mode (#25)
-- Extract engine apply() match arms into dedicated helper functions (#30)
-- Remove upward dependency from ripsed-fs to ripsed-core OpOptions (#40)
-- Extract repetitive validate_op match arms into shared validation helper (#42)
-- Simplify double-negation JSON mode detection logic in main.rs (#27)
-- Extract mode resolution from run() to reduce cyclomatic complexity (#24)
-- Add test coverage for detect_buffered function (#55)
-- Add test coverage for mmap code path in reader.rs (#47)
-- Deduplicate WalkBuilder configuration between serial and parallel discovery (#39)
-- Eliminate double JSON deserialization in detect_stdin path (#43)
-- Replace boolean force_parallel parameter with WalkStrategy enum (#37)
-- Add Default derive to DiscoveryOptions to reduce boilerplate (#36)
-- Deduplicate default_true helper between operation.rs and config.rs (#56)
-- Remove unnecessary rollback wrapper method from AtomicBatch (#49)
-- Replace unwrap_or_else serialization fallback with expect in JSON responses (#51)
-- Change pub mod to mod for internal modules in ripsed-cli binary crate (#64)
-- Replace process::exit in load_config with Result return (#23)
-- Remove unused proptest dev-dependency from ripsed-fs (#46)
-- Remove dead case_insensitive field from Matcher::Literal variant (#58)
-- Remove dead let _ = replace binding in validate_op (#52)
-- Run periodic codebase maintenance pass (#19)
-- Add missing JSON mode tests for undo, config, gitignore, and atomic write test files (#20)
 - New operation: `--transform` — change case of matched text (upper, lower, title, snake_case, camel_case)
 - New operation: `--surround PREFIX SUFFIX` — wrap matching lines with prefix and suffix
 - New operation: `--indent N` — add N spaces before matching lines

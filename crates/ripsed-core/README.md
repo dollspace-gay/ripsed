@@ -2,7 +2,7 @@
 
 Core edit engine for [ripsed](https://github.com/dollspace-gay/ripsed) — a fast, modern stream editor.
 
-This crate contains pure logic with no I/O:
+This crate contains the core logic:
 
 - **Edit engine** — apply find/replace, delete, insert, transform, surround, indent/dedent operations to text
 - **Pattern matching** — literal and regex matching with case-insensitive support
@@ -10,6 +10,7 @@ This crate contains pure logic with no I/O:
 - **Script parser** — parse `.rip` script files into operation sequences
 - **Error taxonomy** — structured errors with machine-readable codes and actionable hints
 - **Configuration** — `.ripsed.toml` parsing and discovery
+- **Undo** — undo log data structures for reversible operations
 
 ## Usage
 
@@ -26,8 +27,8 @@ let op = Op::Replace {
 };
 
 let matcher = Matcher::new(&op).unwrap();
-let output = engine::apply("old text here", &op, &matcher, None, 3).unwrap();
-assert_eq!(output.text.unwrap(), "new text here");
+let output = engine::apply("old text here\n", &op, &matcher, None, 3).unwrap();
+assert_eq!(output.text.unwrap(), "new text here\n");
 ```
 
 ## License
