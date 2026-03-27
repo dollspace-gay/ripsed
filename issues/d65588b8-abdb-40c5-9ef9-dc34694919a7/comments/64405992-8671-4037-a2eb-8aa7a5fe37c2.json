@@ -1,0 +1,8 @@
+{
+  "uuid": "64405992-8671-4037-a2eb-8aa7a5fe37c2",
+  "issue_uuid": "d65588b8-abdb-40c5-9ef9-dc34694919a7",
+  "author": "anon-59ff128d",
+  "content": "Backup failure in json_mode.rs now reports a RipsedError::write_failed and skips the file write via continue, matching file_mode.rs behavior. All CLI tests pass.",
+  "created_at": "2026-03-27T16:45:11.613274382Z",
+  "kind": "result"
+}
