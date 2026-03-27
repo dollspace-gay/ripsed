@@ -1,0 +1,8 @@
+{
+  "uuid": "73cb501c-2069-475e-b461-d49558ed9a51",
+  "issue_uuid": "8408a63a-bfee-446c-afc2-b66348d66b0d",
+  "author": "anon-59ff128d",
+  "content": "confirm_change was replaced by confirm_file in issue #12. The old function no longer exists. This issue is superseded.",
+  "created_at": "2026-03-27T17:10:18.017381975Z",
+  "kind": "observation"
+}
