@@ -2,11 +2,12 @@
   "uuid": "ef6fd1ec-9224-4d4c-8530-8fdbcebb0bd0",
   "display_id": 63,
   "title": "Derive undo directory from config/project root instead of current_dir",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "anon-59ff128d",
   "created_at": "2026-03-27T13:20:55.593081742Z",
-  "updated_at": "2026-03-27T13:20:58.869812449Z",
+  "updated_at": "2026-03-27T17:24:15.456485793Z",
+  "closed_at": "2026-03-27T17:24:15.456485793Z",
   "labels": [
     "enhancement"
   ]
