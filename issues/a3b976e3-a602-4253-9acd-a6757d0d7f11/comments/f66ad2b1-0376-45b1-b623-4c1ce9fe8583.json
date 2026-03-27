@@ -1,0 +1,8 @@
+{
+  "uuid": "f66ad2b1-0376-45b1-b623-4c1ce9fe8583",
+  "issue_uuid": "a3b976e3-a602-4253-9acd-a6757d0d7f11",
+  "author": "anon-59ff128d",
+  "content": "Extracted shared file-processing logic into three new functions in shared.rs: apply_to_file() (read + engine apply), commit_file_changes() (backup + undo + atomic write), print_changes() and print_final_summary() (output formatting). Both file_mode.rs and script_mode.rs now call these shared functions instead of duplicating the logic. file_mode retains its --confirm interactive flow; script_mode retains its per-op glob and backup deduplication via HashSet. All 209 tests pass.",
+  "created_at": "2026-03-27T17:30:46.233651997Z",
+  "kind": "result"
+}
