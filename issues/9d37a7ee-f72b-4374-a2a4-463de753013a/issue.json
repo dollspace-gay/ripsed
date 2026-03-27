@@ -1,0 +1,10 @@
+{
+  "uuid": "9d37a7ee-f72b-4374-a2a4-463de753013a",
+  "display_id": 33,
+  "title": "Reduce memory usage by avoiding full text clone in undo entries",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "anon-59ff128d",
+  "created_at": "2026-03-27T13:17:31.038447536Z",
+  "updated_at": "2026-03-27T13:17:31.038447536Z"
+}
