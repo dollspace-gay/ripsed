@@ -1,0 +1,8 @@
+{
+  "uuid": "05e43673-55c3-4536-a1ca-87453e30c32f",
+  "issue_uuid": "caf88532-652e-40d0-b08b-9f750c9d681c",
+  "author": "anon-59ff128d",
+  "content": "rollback() is just drop(self). Removing it and updating the test to use drop() directly.",
+  "created_at": "2026-03-27T17:14:05.984153292Z",
+  "kind": "plan"
+}
