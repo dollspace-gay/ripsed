@@ -1,0 +1,8 @@
+{
+  "uuid": "57b365e6-9851-41a4-8b23-4f6008e96ca4",
+  "issue_uuid": "036e35f5-767d-40b1-b43d-34f079a7a286",
+  "author": "anon-59ff128d",
+  "content": "Removing the wildcard _ => {} arm at line 298 of request.rs to enforce exhaustive matching on Op variants.",
+  "created_at": "2026-03-27T16:43:08.523237700Z",
+  "kind": "plan"
+}
