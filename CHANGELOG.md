@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add input size limits to stdin and JSON deserialization (#14)
 
 ### Fixed
+- Fix lock staleness detection breaking acquire_twice and timeout tests (#68)
+- Fix formatting and clippy warnings across all crates (#66)
 - Fix parallel discovery heuristic only counting top-level entries (#38)
 - Fix detect_buffered partial-buffer edge case with fill_buf peek (#44)
 - Replace TOCTOU exists+read pair with single read in AtomicBatch::commit (#48)
@@ -46,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.0] - 2026-03-01
 
 ### Added
+- Bump crate versions to 0.2.4 (#67)
 - Extract shared test helpers into common module in ripsed-cli tests (#61)
 - Deduplicate shared file-processing logic between file_mode and script_mode (#25)
 - Extract engine apply() match arms into dedicated helper functions (#30)

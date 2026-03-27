@@ -44,6 +44,7 @@ impl FileLock {
             .unwrap_or_default()
             .as_secs();
         let _ = writeln!(file, "{pid} {timestamp}");
+        let _ = file.flush();
 
         Ok(Self {
             file: Some(file),
