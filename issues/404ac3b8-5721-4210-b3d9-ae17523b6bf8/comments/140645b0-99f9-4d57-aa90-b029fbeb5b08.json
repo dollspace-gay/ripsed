@@ -1,0 +1,8 @@
+{
+  "uuid": "140645b0-99f9-4d57-aa90-b029fbeb5b08",
+  "issue_uuid": "404ac3b8-5721-4210-b3d9-ae17523b6bf8",
+  "author": "anon-59ff128d",
+  "content": "Eliminated the fill_buf peek in detect_buffered. Both detect_stdin and detect_buffered now use a shared read_bounded helper that reads all bytes via Read::take(MAX_STDIN_BYTES + 1) before inspecting content, and a shared classify_buffer function for the JSON detection logic. This removes the partial-buffer edge case where the opening brace might not appear in the peeked window.",
+  "created_at": "2026-03-27T17:21:10.668154108Z",
+  "kind": "result"
+}
