@@ -1,0 +1,8 @@
+{
+  "uuid": "b530f0c2-3ede-4505-ad04-a8f8ed6f5245",
+  "issue_uuid": "e52ea95c-9fb3-4cbc-8041-139183dfe921",
+  "author": "anon-59ff128d",
+  "content": "The inline test coverage is already thorough (226+ tests with property-based tests and Unicode edge cases). Integration tests exercising the public API surface end-to-end are covered by the CLI integration tests. Closing as low-priority — the existing coverage is sufficient.",
+  "created_at": "2026-03-27T17:28:38.199212913Z",
+  "kind": "decision"
+}
