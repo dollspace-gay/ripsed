@@ -1,0 +1,8 @@
+{
+  "uuid": "1c621999-9336-46fc-b556-42ad2dd53ffd",
+  "issue_uuid": "6664c033-db5f-4784-b9dc-8781be46f8d8",
+  "author": "anon-59ff128d",
+  "content": "Plan: (1) Move locking OUT of write_atomic/AtomicBatch — these become pure write primitives again. (2) Create crates/ripsed/ facade with re-exports + high-level apply_to_file() that does locked read-modify-write as a single atomic unit. (3) Update CLI file_mode and json_mode to acquire FileLock before reading, hold through write. This eliminates the race where two processes read the same original, compute independently, and clobber each other.",
+  "created_at": "2026-03-28T14:57:35.928731476Z",
+  "kind": "plan"
+}
