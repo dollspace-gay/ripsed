@@ -448,12 +448,12 @@ mod tests {
         let path_clone = path.clone();
         let handle = std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(50));
-            lock.release().unwrap();
+            drop(lock); // release via Drop (ignores NotFound, unlike release())
         });
 
-        let lock2 = FileLock::try_lock_with_timeout(&path_clone, Duration::from_secs(2)).unwrap();
+        let _lock2 = FileLock::try_lock_with_timeout(&path_clone, Duration::from_secs(2)).unwrap();
         handle.join().unwrap();
-        lock2.release().unwrap();
+        // _lock2 cleaned up by Drop when test exits
     }
 
     #[test]
@@ -473,28 +473,40 @@ mod tests {
 
     #[test]
     fn concurrent_acquire_only_one_wins() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::{Arc, Barrier};
 
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("target.txt");
         fs::write(&path, "data").unwrap();
 
-        let barrier = Arc::new(Barrier::new(8));
+        const N: usize = 8;
+        let barrier_start = Arc::new(Barrier::new(N));
+        let barrier_end = Arc::new(Barrier::new(N));
+        let winners = Arc::new(AtomicUsize::new(0));
         let mut handles = Vec::new();
 
-        for _ in 0..8 {
+        for _ in 0..N {
             let p = path.clone();
-            let b = Arc::clone(&barrier);
+            let bs = Arc::clone(&barrier_start);
+            let be = Arc::clone(&barrier_end);
+            let w = Arc::clone(&winners);
             handles.push(std::thread::spawn(move || {
-                b.wait();
-                FileLock::acquire(&p).ok()
+                bs.wait(); // all threads start together
+                let _lock = FileLock::acquire(&p).ok();
+                if _lock.is_some() {
+                    w.fetch_add(1, Ordering::SeqCst);
+                }
+                be.wait(); // winner holds lock until all threads have tried
             }));
         }
 
-        let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
-        let winners: Vec<_> = results.iter().filter(|r| r.is_some()).collect();
+        for h in handles {
+            h.join().unwrap();
+        }
+
         assert_eq!(
-            winners.len(),
+            winners.load(Ordering::SeqCst),
             1,
             "exactly one thread should acquire the lock"
         );
