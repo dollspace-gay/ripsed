@@ -169,10 +169,7 @@ mod tests {
     #[test]
     fn lock_path_for_file_without_extension() {
         let p = Path::new("/tmp/Makefile");
-        assert_eq!(
-            lock_path_for(p),
-            PathBuf::from("/tmp/Makefile.ripsed.lock")
-        );
+        assert_eq!(lock_path_for(p), PathBuf::from("/tmp/Makefile.ripsed.lock"));
     }
 
     #[test]
@@ -340,12 +337,7 @@ mod tests {
         let lock = FileLock::acquire(&path).unwrap();
         // Verify the lock file now has *our* PID
         let contents = fs::read_to_string(&lp).unwrap();
-        let pid: u32 = contents
-            .split_whitespace()
-            .next()
-            .unwrap()
-            .parse()
-            .unwrap();
+        let pid: u32 = contents.split_whitespace().next().unwrap().parse().unwrap();
         assert_eq!(pid, std::process::id());
         lock.release().unwrap();
     }
