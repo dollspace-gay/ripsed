@@ -1,0 +1,8 @@
+{
+  "uuid": "d50d4200-3d7d-43d5-8c84-65bd1240a148",
+  "issue_uuid": "234ac03b-6d8f-4997-84a1-a2e867aff777",
+  "author": "anon-59ff128d",
+  "content": "Version bumped to 0.2.6 in workspace Cargo.toml, Cargo.lock regenerated, CHANGELOG.md updated with new section.",
+  "created_at": "2026-03-28T14:25:47.793923588Z",
+  "kind": "result"
+}
