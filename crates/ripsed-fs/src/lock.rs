@@ -135,9 +135,24 @@ fn is_process_alive(pid: u32) -> bool {
     ret == 0 || io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH)
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+fn is_process_alive(pid: u32) -> bool {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+    // OpenProcess returns NULL if the process doesn't exist or access is denied.
+    // PROCESS_QUERY_LIMITED_INFORMATION is the least-privilege access right.
+    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if handle.is_null() {
+        false
+    } else {
+        unsafe { CloseHandle(handle) };
+        true
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
 fn is_process_alive(_pid: u32) -> bool {
-    // On non-Unix platforms, conservatively assume the process is alive
+    // On unknown platforms, conservatively assume the process is alive
     true
 }
 
