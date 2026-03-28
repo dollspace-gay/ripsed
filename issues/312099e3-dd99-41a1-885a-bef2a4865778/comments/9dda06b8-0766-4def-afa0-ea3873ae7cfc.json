@@ -1,0 +1,8 @@
+{
+  "uuid": "9dda06b8-0766-4def-afa0-ea3873ae7cfc",
+  "issue_uuid": "312099e3-dd99-41a1-885a-bef2a4865778",
+  "author": "anon-59ff128d",
+  "content": "Replaced /proc/{pid} existence check with libc::kill(pid, 0) — the POSIX-standard process liveness check. Added libc as a cfg(unix) dependency. All 33 ripsed-fs tests pass, clippy clean.",
+  "created_at": "2026-03-28T14:11:38.951132207Z",
+  "kind": "result"
+}
