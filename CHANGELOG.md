@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6] - 2026-03-28
+
+### Fixed
+- Fix lock staleness check failing on macOS due to /proc not existing (#71)
+
+### Added
+- Integrate FileLock into write_atomic, AtomicBatch::commit, and save_undo_log for inter-process safety (#71)
+- Expand lock module test suite from 7 to 26 tests covering staleness, concurrency, and edge cases (#71)
+
 ## [0.2.5] - 2026-03-27
 
 ### Security
@@ -31,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reject unknown Op variants in validate_op instead of silent accept (#20)
 
 ### Added
+- Update README and crate documentation for v0.2.5 changes (#70)
 - Add PID and staleness detection to file lock mechanism (#19)
 - Add WalkStrategy enum replacing boolean force_parallel parameter (#37)
 - Add Default impl for DiscoveryOptions (#36)

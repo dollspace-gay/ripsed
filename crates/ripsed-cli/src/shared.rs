@@ -2,7 +2,9 @@ use ripsed_core::config::Config;
 use ripsed_core::operation::OpOptions;
 use ripsed_core::undo::{UndoEntry, UndoLog, UndoRecord};
 use ripsed_fs::discovery::DiscoveryOptions;
+use ripsed_fs::lock::FileLock;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use crate::args::Cli;
 
@@ -102,6 +104,9 @@ pub fn build_op_options(cli: &Cli, config: &Config, glob: Option<String>) -> OpO
 }
 
 /// Save the undo log to disk. Warns on stderr if the write fails.
+///
+/// Acquires an advisory file lock on the undo log to prevent concurrent
+/// ripsed processes from clobbering each other's entries.
 pub fn save_undo_log(log: &UndoLog) {
     let dir = undo_dir();
     if let Err(e) = std::fs::create_dir_all(&dir) {
@@ -112,6 +117,13 @@ pub fn save_undo_log(log: &UndoLog) {
         return;
     }
     let path = undo_log_path();
+    let _lock = match FileLock::try_lock_with_timeout(&path, Duration::from_secs(5)) {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("ripsed: warning: cannot lock undo log: {e}");
+            return;
+        }
+    };
     if let Err(e) = std::fs::write(&path, log.to_jsonl()) {
         eprintln!(
             "ripsed: warning: cannot save undo log to {}: {e}",

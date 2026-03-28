@@ -1,10 +1,21 @@
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use tempfile::NamedTempFile;
 
+use crate::lock::FileLock;
+
+/// Timeout for acquiring file locks before writes.
+const LOCK_TIMEOUT: Duration = Duration::from_secs(5);
+
 /// Write content to a file atomically using a temporary file + rename.
+///
+/// Acquires an advisory file lock on the target path to prevent concurrent
+/// writes from multiple ripsed processes.
 pub fn write_atomic(path: &Path, content: &str) -> std::io::Result<()> {
+    let _lock = FileLock::try_lock_with_timeout(path, LOCK_TIMEOUT)?;
+
     let parent = path.parent().unwrap_or(Path::new("."));
     let mut tmp = NamedTempFile::new_in(parent)?;
     tmp.write_all(content.as_bytes())?;
@@ -100,10 +111,17 @@ impl AtomicBatch {
 
     /// Commit all staged writes atomically (all-or-nothing).
     ///
+    /// Acquires advisory file locks on all target paths before committing.
     /// Before renaming, the original contents of each destination file are
     /// saved. If any rename fails mid-commit, all already-persisted files
     /// are restored from the saved originals.
     pub fn commit(self) -> std::io::Result<()> {
+        // Phase 0: acquire locks on all destination files.
+        let mut _locks = Vec::with_capacity(self.pending.len());
+        for (_tmp, dest) in &self.pending {
+            _locks.push(FileLock::try_lock_with_timeout(dest, LOCK_TIMEOUT)?);
+        }
+
         // Phase 1: snapshot originals so we can roll back on partial failure.
         let mut originals: Vec<(PathBuf, Option<Vec<u8>>)> = Vec::with_capacity(self.pending.len());
         for (_tmp, dest) in &self.pending {
