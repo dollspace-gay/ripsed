@@ -1,0 +1,10 @@
+{
+  "uuid": "4cd3c0be-2797-4d5c-8039-d0277638811d",
+  "display_id": 73,
+  "title": "Fix lock staleness on macOS, integrate FileLock, bump to v0.2.6",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "anon-59ff128d",
+  "created_at": "2026-03-28T14:26:11.449505463Z",
+  "updated_at": "2026-03-28T14:26:11.449505463Z"
+}
