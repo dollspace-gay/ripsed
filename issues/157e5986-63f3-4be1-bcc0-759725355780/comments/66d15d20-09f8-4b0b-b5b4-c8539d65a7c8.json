@@ -1,0 +1,8 @@
+{
+  "uuid": "66d15d20-09f8-4b0b-b5b4-c8539d65a7c8",
+  "issue_uuid": "157e5986-63f3-4be1-bcc0-759725355780",
+  "author": "anon-59ff128d",
+  "content": "Fixed both flaky tests: (1) concurrent test uses dual barriers — winner holds lock via end-barrier until all threads have tried. (2) timeout test uses Drop instead of release().unwrap() to avoid NotFound race. All 508 tests pass, fmt/clippy clean.",
+  "created_at": "2026-03-28T14:34:31.435837145Z",
+  "kind": "result"
+}
