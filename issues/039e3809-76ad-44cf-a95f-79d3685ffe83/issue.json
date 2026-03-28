@@ -2,11 +2,12 @@
   "uuid": "039e3809-76ad-44cf-a95f-79d3685ffe83",
   "display_id": 77,
   "title": "Fix needless return clippy warning in shared.rs",
-  "status": "open",
+  "status": "closed",
   "priority": "low",
   "created_by": "anon-59ff128d",
   "created_at": "2026-03-28T14:45:52.791082123Z",
-  "updated_at": "2026-03-28T14:45:58.529566053Z",
+  "updated_at": "2026-03-28T14:47:09.111545854Z",
+  "closed_at": "2026-03-28T14:47:09.111545854Z",
   "labels": [
     "fix"
   ]
