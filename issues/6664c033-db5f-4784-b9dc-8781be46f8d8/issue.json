@@ -2,11 +2,12 @@
   "uuid": "6664c033-db5f-4784-b9dc-8781be46f8d8",
   "display_id": 78,
   "title": "Add ripsed facade crate and fix read-modify-write locking",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "anon-59ff128d",
   "created_at": "2026-03-28T14:57:21.134188381Z",
-  "updated_at": "2026-03-28T14:57:27.629310195Z",
+  "updated_at": "2026-03-28T15:03:25.175656347Z",
+  "closed_at": "2026-03-28T15:03:25.175656347Z",
   "labels": [
     "feature"
   ]
