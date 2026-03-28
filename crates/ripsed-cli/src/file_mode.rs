@@ -3,8 +3,10 @@ use ripsed_core::engine;
 use ripsed_core::matcher::Matcher;
 use ripsed_core::operation::Op;
 use ripsed_fs::discovery::{WalkStrategy, discover_files_auto};
+use ripsed_fs::lock::FileLock;
 use ripsed_fs::reader;
 use ripsed_fs::writer;
+use std::time::Duration;
 
 use crate::args::Cli;
 use crate::human;
@@ -102,6 +104,17 @@ pub fn run_file_mode(cli: &Cli, config: &Config) -> Result<(), i32> {
     let mut apply_all = false;
 
     for file_path in &files {
+        // Acquire advisory lock before reading — holds through backup + write
+        // to prevent concurrent ripsed processes from clobbering each other.
+        // In dry-run mode we still lock to get a consistent read.
+        let _lock = match FileLock::try_lock_with_timeout(file_path, Duration::from_secs(5)) {
+            Ok(l) => l,
+            Err(e) => {
+                eprintln!("ripsed: {}: {e}", file_path.display());
+                continue;
+            }
+        };
+
         let content = match reader::read_file(file_path) {
             Ok(c) => c,
             Err(e) => {

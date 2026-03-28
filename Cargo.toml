@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/ripsed",
     "crates/ripsed-core",
     "crates/ripsed-fs",
     "crates/ripsed-json",
@@ -18,6 +19,7 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 # Internal crates
+ripsed = { path = "crates/ripsed", version = "0.2.6" }
 ripsed-core = { path = "crates/ripsed-core", version = "0.2.6" }
 ripsed-fs = { path = "crates/ripsed-fs", version = "0.2.6" }
 ripsed-json = { path = "crates/ripsed-json", version = "0.2.6" }

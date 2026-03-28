@@ -783,6 +783,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 
 [[package]]
+name = "ripsed"
+version = "0.2.6"
+dependencies = [
+ "ripsed-core",
+ "ripsed-fs",
+ "ripsed-json",
+ "tempfile",
+]
+
+[[package]]
 name = "ripsed-cli"
 version = "0.2.6"
 dependencies = [

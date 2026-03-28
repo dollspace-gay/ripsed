@@ -8,9 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.6] - 2026-03-28
 
 ### Fixed
+- Fix stale lock tests failing on Windows due to conservative is_process_alive (#76)
+- Fix flaky lock tests in CI (concurrent race, tempdir lifetime) (#75)
 - Fix lock staleness check failing on macOS due to /proc not existing (#71)
 
 ### Added
+- Add ripsed facade crate and fix read-modify-write locking (#78)
 - Integrate FileLock into write_atomic, AtomicBatch::commit, and save_undo_log for inter-process safety (#71)
 - Expand lock module test suite from 7 to 26 tests covering staleness, concurrency, and edge cases (#71)
 

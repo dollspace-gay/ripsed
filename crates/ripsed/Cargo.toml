@@ -1,0 +1,17 @@
+[package]
+name = "ripsed"
+description = "Bulk find-and-replace engine — regex, literal, multi-file, atomic writes"
+readme = "../../README.md"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ripsed-core = { workspace = true }
+ripsed-fs = { workspace = true }
+ripsed-json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

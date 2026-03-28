@@ -3,10 +3,12 @@ use ripsed_core::engine;
 use ripsed_core::matcher::Matcher;
 use ripsed_core::script::{Script, parse_script};
 use ripsed_fs::discovery::{WalkStrategy, discover_files_auto};
+use ripsed_fs::lock::FileLock;
 use ripsed_fs::reader;
 use ripsed_fs::writer;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::time::Duration;
 
 use crate::args::Cli;
 use crate::human;
@@ -37,6 +39,9 @@ pub fn run_script_mode(script_path: &str, cli: &Cli, config: &Config) -> Result<
 
     let mut total_changes = 0usize;
     let mut files_modified_set: HashSet<PathBuf> = HashSet::new();
+
+    // Advisory locks held from first read of each file through final write.
+    let mut file_locks: HashMap<PathBuf, FileLock> = HashMap::new();
 
     // Load undo log for recording changes (only when not dry-run)
     let mut undo_log = if !cli.dry_run {
@@ -75,6 +80,19 @@ pub fn run_script_mode(script_path: &str, cli: &Cli, config: &Config) -> Result<
         }
 
         for file_path in &files {
+            // Acquire advisory lock on first access to this file.
+            if !file_locks.contains_key(file_path) {
+                match FileLock::try_lock_with_timeout(file_path, Duration::from_secs(5)) {
+                    Ok(lock) => {
+                        file_locks.insert(file_path.clone(), lock);
+                    }
+                    Err(e) => {
+                        eprintln!("ripsed: {}: {e}", file_path.display());
+                        continue;
+                    }
+                }
+            }
+
             let content = match reader::read_file(file_path) {
                 Ok(c) => c,
                 Err(e) => {

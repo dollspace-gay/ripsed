@@ -4,6 +4,7 @@ use ripsed_core::engine;
 use ripsed_core::error::RipsedError;
 use ripsed_core::matcher::Matcher;
 use ripsed_fs::discovery::discover_files;
+use ripsed_fs::lock::FileLock;
 use ripsed_fs::reader;
 use ripsed_fs::writer;
 use ripsed_json::request::JsonRequest;
@@ -11,6 +12,7 @@ use ripsed_json::response::{JsonResponse, UndoResponse, UndoSummary};
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use crate::shared::{load_undo_log, record_undo, save_undo_log};
 
@@ -50,6 +52,10 @@ pub fn run_json_mode(input: &str, config: &Config, jsonl: bool) -> Result<(), i3
 
     // Content cache: subsequent operations see the output of previous ones
     let mut content_cache: HashMap<PathBuf, String> = HashMap::new();
+
+    // Advisory locks held from first read of each file through final write.
+    // Prevents concurrent ripsed processes from clobbering each other.
+    let mut file_locks: HashMap<PathBuf, FileLock> = HashMap::new();
 
     // For atomic batch mode, collect all writes to apply at once
     let mut pending_writes: Vec<(std::path::PathBuf, String)> = Vec::new();
@@ -96,6 +102,23 @@ pub fn run_json_mode(input: &str, config: &Config, jsonl: bool) -> Result<(), i3
                     }
                 }
             }
+            // Acquire advisory lock on first access to this file.
+            // The lock is held in file_locks until the function returns.
+            if !file_locks.contains_key(file_path) {
+                match FileLock::try_lock_with_timeout(file_path, Duration::from_secs(5)) {
+                    Ok(lock) => {
+                        file_locks.insert(file_path.clone(), lock);
+                    }
+                    Err(e) => {
+                        errors.push(RipsedError::write_failed(
+                            &file_path.to_string_lossy(),
+                            &format!("lock failed: {e}"),
+                        ));
+                        continue;
+                    }
+                }
+            }
+
             // Use cached content if a prior operation already modified this file
             let content = if let Some(cached) = content_cache.get(file_path) {
                 cached.clone()
