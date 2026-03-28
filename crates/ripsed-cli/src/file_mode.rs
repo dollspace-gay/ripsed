@@ -106,13 +106,17 @@ pub fn run_file_mode(cli: &Cli, config: &Config) -> Result<(), i32> {
     for file_path in &files {
         // Acquire advisory lock before reading — holds through backup + write
         // to prevent concurrent ripsed processes from clobbering each other.
-        // In dry-run mode we still lock to get a consistent read.
-        let _lock = match FileLock::try_lock_with_timeout(file_path, Duration::from_secs(5)) {
-            Ok(l) => l,
-            Err(e) => {
-                eprintln!("ripsed: {}: {e}", file_path.display());
-                continue;
+        // Skipped in dry-run mode (read-only, no lock files needed).
+        let _lock = if !cli.dry_run {
+            match FileLock::try_lock_with_timeout(file_path, Duration::from_secs(5)) {
+                Ok(l) => Some(l),
+                Err(e) => {
+                    eprintln!("ripsed: {}: {e}", file_path.display());
+                    continue;
+                }
             }
+        } else {
+            None
         };
 
         let content = match reader::read_file(file_path) {

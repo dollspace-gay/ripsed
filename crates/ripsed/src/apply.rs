@@ -58,8 +58,15 @@ pub fn apply_to_file(
     op: &Op,
     options: &ApplyOptions,
 ) -> Result<EngineOutput, ApplyError> {
-    let _lock = FileLock::try_lock_with_timeout(path, options.lock_timeout)
-        .map_err(|e| ApplyError::Lock(path.to_path_buf(), e))?;
+    // Only lock when we might write — dry_run is read-only.
+    let _lock = if !options.dry_run {
+        Some(
+            FileLock::try_lock_with_timeout(path, options.lock_timeout)
+                .map_err(|e| ApplyError::Lock(path.to_path_buf(), e))?,
+        )
+    } else {
+        None
+    };
 
     let content = reader::read_file(path).map_err(|e| ApplyError::Read(path.to_path_buf(), e))?;
 

@@ -104,7 +104,8 @@ pub fn run_json_mode(input: &str, config: &Config, jsonl: bool) -> Result<(), i3
             }
             // Acquire advisory lock on first access to this file.
             // The lock is held in file_locks until the function returns.
-            if !file_locks.contains_key(file_path) {
+            // Skipped in dry-run mode (read-only, no lock files needed).
+            if !dry_run && !file_locks.contains_key(file_path) {
                 match FileLock::try_lock_with_timeout(file_path, Duration::from_secs(5)) {
                     Ok(lock) => {
                         file_locks.insert(file_path.clone(), lock);

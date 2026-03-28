@@ -81,7 +81,8 @@ pub fn run_script_mode(script_path: &str, cli: &Cli, config: &Config) -> Result<
 
         for file_path in &files {
             // Acquire advisory lock on first access to this file.
-            if !file_locks.contains_key(file_path) {
+            // Skipped in dry-run mode (read-only, no lock files needed).
+            if !cli.dry_run && !file_locks.contains_key(file_path) {
                 match FileLock::try_lock_with_timeout(file_path, Duration::from_secs(5)) {
                     Ok(lock) => {
                         file_locks.insert(file_path.clone(), lock);
