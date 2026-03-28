@@ -1,0 +1,8 @@
+{
+  "uuid": "d92e7ec3-87c2-4d2b-b980-32fe28e89a5f",
+  "issue_uuid": "312099e3-dd99-41a1-885a-bef2a4865778",
+  "author": "anon-59ff128d",
+  "content": "Plan: (1) Fix PID write error propagation — bubble up writeln!/flush errors instead of discarding. (2) Expand test suite with: lock_path_for edge cases, is_lock_stale parsing variants, stale lock cleanup, lock file content verification, concurrent multi-thread acquisition, nonexistent directory error, error message quality.",
+  "created_at": "2026-03-28T14:14:46.943805294Z",
+  "kind": "plan"
+}
