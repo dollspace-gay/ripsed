@@ -129,14 +129,13 @@ pub fn save_undo_log(log: &UndoLog) {
             "ripsed: warning: cannot save undo log to {}: {e}",
             path.display()
         );
-        return;
-    }
-
-    // Restrict permissions — undo log may contain sensitive file contents
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let perms = std::fs::Permissions::from_mode(0o600);
-        let _ = std::fs::set_permissions(&path, perms);
+    } else {
+        // Restrict permissions — undo log may contain sensitive file contents
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let perms = std::fs::Permissions::from_mode(0o600);
+            let _ = std::fs::set_permissions(&path, perms);
+        }
     }
 }
