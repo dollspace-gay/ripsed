@@ -1,0 +1,10 @@
+{
+  "uuid": "60e157d5-90c3-475e-bc91-68271a879bb5",
+  "issue_uuid": "3ec61aac-5042-4018-aadd-7fd7d25a03c6",
+  "author": "l6vc",
+  "content": "Version bumped to 0.2.8 and all code changes committed as 8ec2497. CHANGELOG.md updated with the full list of fixes, additions, and removals. 542 tests passing, clippy clean. Branch ahead of origin/main by 1 — push is manual per project policy.",
+  "created_at": "2026-04-16T17:06:39.924105499Z",
+  "kind": "handoff",
+  "signed_by": "SHA256:owGv2pS6Mp5dzq69ND6ibtti3Rz48VKssgioZDAjaEw",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg3COauy3CBNOq40NwS6eLtby6EessoIBJCW9P6y4za+cAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABARfOF9a+1GZBFHgEWqRjE8NRpyTH5dIXnysUhf+3qu2pu3ZtTmUO71lbaBCItRPbNsAtssd1s89NT+NgTMEUeDg=="
+}
