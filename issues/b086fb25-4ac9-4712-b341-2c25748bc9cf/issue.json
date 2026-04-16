@@ -1,0 +1,10 @@
+{
+  "uuid": "b086fb25-4ac9-4712-b341-2c25748bc9cf",
+  "display_id": 84,
+  "title": "Harden test suite: remove tautologies, add adversarial tests",
+  "status": "open",
+  "priority": "medium",
+  "created_by": "anon-59ff128d",
+  "created_at": "2026-04-16T15:53:28.882079413Z",
+  "updated_at": "2026-04-16T15:53:28.882079413Z"
+}
