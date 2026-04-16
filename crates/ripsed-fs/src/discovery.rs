@@ -66,12 +66,15 @@ fn configure_walk_builder(opts: &DiscoveryOptions) -> io::Result<WalkBuilder> {
 
 /// Discover files to process based on options.
 ///
-/// Returns an error if the glob pattern is invalid.
+/// Returns an error if the glob pattern is invalid. Results are deduplicated
+/// by filesystem identity so that a symlink alias or hard-link pair of the
+/// same inode is only returned once — callers that lock by path would race
+/// each other otherwise.
 pub fn discover_files(opts: &DiscoveryOptions) -> io::Result<Vec<PathBuf>> {
     let builder = configure_walk_builder(opts)?;
     let walker = builder.build();
 
-    Ok(walker
+    let files: Vec<PathBuf> = walker
         .filter_map(|entry| entry.ok())
         .filter(|entry| entry.file_type().is_some_and(|ft| ft.is_file()))
         .filter(|entry| {
@@ -88,7 +91,9 @@ pub fn discover_files(opts: &DiscoveryOptions) -> io::Result<Vec<PathBuf>> {
             }
         })
         .map(|entry| entry.into_path())
-        .collect())
+        .collect();
+
+    Ok(dedupe_by_identity(files))
 }
 
 /// Discover files using WalkBuilder's parallel walker for large directories.
@@ -135,7 +140,10 @@ pub fn discover_files_parallel(opts: &DiscoveryOptions) -> io::Result<Vec<PathBu
 
     let mut files = results.into_inner().unwrap();
     files.sort();
-    Ok(files)
+    // Deduplicate by filesystem identity — see `discover_files` and
+    // `dedupe_by_identity` for rationale. Sorting first keeps the kept
+    // path deterministic (lexicographically smallest wins).
+    Ok(dedupe_by_identity(files))
 }
 
 /// Strategy for choosing between serial and parallel file discovery.
@@ -169,6 +177,66 @@ fn glob_match(pattern: &str, path: &str) -> bool {
         .ok()
         .and_then(|b| b.build().ok())
         .is_some_and(|gi| gi.matched(Path::new(path), false).is_ignore())
+}
+
+/// A platform-specific stable identity for a filesystem entry.
+///
+/// Two paths that share the same `FileIdentity` refer to the same underlying
+/// file, so processing both would cause double writes / lock races. This is
+/// used by [`dedupe_by_identity`] to collapse symlink aliases and hard links.
+///
+/// On Unix, we use `(dev, ino)` which catches both symlinks and hard links.
+/// On other platforms we fall back to the canonical path, which catches
+/// symlinks but not hard links (Windows file-ID would require winapi).
+#[derive(Debug, Hash, PartialEq, Eq)]
+enum FileIdentity {
+    #[cfg(unix)]
+    Inode(u64, u64),
+    #[cfg(not(unix))]
+    Canonical(PathBuf),
+}
+
+fn file_identity(path: &Path) -> Option<FileIdentity> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let m = std::fs::metadata(path).ok()?;
+        Some(FileIdentity::Inode(m.dev(), m.ino()))
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::canonicalize(path)
+            .ok()
+            .map(FileIdentity::Canonical)
+    }
+}
+
+/// Deduplicate paths by [`FileIdentity`], keeping the first occurrence.
+///
+/// This prevents downstream callers (e.g. `ripsed::apply_to_file`) from
+/// acquiring per-path locks on two different paths that refer to the same
+/// underlying file — which would race and silently lose writes.
+///
+/// If [`file_identity`] fails for a path (permission denied, broken symlink,
+/// etc.), the path is kept as-is; we prefer preserving visibility of a file
+/// over opportunistic dedup.
+fn dedupe_by_identity(files: Vec<PathBuf>) -> Vec<PathBuf> {
+    use std::collections::HashSet;
+    let mut seen: HashSet<FileIdentity> = HashSet::new();
+    let mut out = Vec::with_capacity(files.len());
+    for path in files {
+        match file_identity(&path) {
+            Some(id) => {
+                if seen.insert(id) {
+                    out.push(path);
+                }
+            }
+            // If we can't establish identity, keep the path — the worst case
+            // is a missed dedup, which we're tolerating to avoid losing files.
+            None => out.push(path),
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -338,5 +406,235 @@ mod tests {
         assert!(discover_files(&opts).is_ok());
         assert!(discover_files_parallel(&opts).is_ok());
         assert!(discover_files_auto(&opts, WalkStrategy::Auto).is_ok());
+    }
+
+    // ---- Adversarial: symlink scope / follow_links semantics ----
+
+    /// **Adversarial**: By default (`follow_links = false`), a symlink whose
+    /// target lives OUTSIDE the discovery root must NOT cause that target to
+    /// be discovered. This is a documented-but-untested invariant — if
+    /// broken, an attacker could trick `ripsed '...' '...'` into editing
+    /// `/etc/passwd` by planting a symlink in a repo.
+    #[cfg(unix)]
+    #[test]
+    fn symlink_outside_root_not_followed_by_default() {
+        use std::os::unix::fs::symlink;
+
+        let outside_dir = tempfile::tempdir().unwrap();
+        let sensitive = outside_dir.path().join("secret.conf");
+        fs::write(&sensitive, "DO NOT EDIT\n").unwrap();
+
+        let root_dir = tempfile::tempdir().unwrap();
+        // Place a symlink inside root pointing to the external sensitive file.
+        let link_in_root = root_dir.path().join("innocent.txt");
+        symlink(&sensitive, &link_in_root).unwrap();
+
+        let opts = DiscoveryOptions {
+            root: root_dir.path().to_path_buf(),
+            glob: None,
+            ignore_pattern: None,
+            gitignore: false,
+            hidden: false,
+            max_depth: None,
+            follow_links: false,
+        };
+
+        let files = discover_files(&opts).unwrap();
+        // The external file's canonical path must not appear in the results.
+        let sensitive_canonical = fs::canonicalize(&sensitive).unwrap();
+        for f in &files {
+            if let Ok(can) = fs::canonicalize(f) {
+                assert_ne!(
+                    can, sensitive_canonical,
+                    "External sensitive file leaked into discovery via symlink: {f:?}"
+                );
+            }
+        }
+    }
+
+    /// **Adversarial**: With `follow_links = true`, a symlink pointing to a
+    /// file in the same tree must not cause the underlying inode to appear
+    /// twice in the result. Downstream callers that per-path lock would
+    /// otherwise race two lock files for one inode and silently lose writes.
+    ///
+    /// Tight invariant: `canonicals.len() == distinct.len()` — no canonical
+    /// path appears more than once.
+    #[cfg(unix)]
+    #[test]
+    fn symlink_alias_deduped_by_identity() {
+        use std::os::unix::fs::symlink;
+
+        let dir = tempfile::tempdir().unwrap();
+        let real = dir.path().join("real.txt");
+        fs::write(&real, "content\n").unwrap();
+        let link = dir.path().join("alias.txt");
+        symlink(&real, &link).unwrap();
+
+        let opts = DiscoveryOptions {
+            root: dir.path().to_path_buf(),
+            glob: None,
+            ignore_pattern: None,
+            gitignore: false,
+            hidden: false,
+            max_depth: None,
+            follow_links: true,
+        };
+
+        let files = discover_files_parallel(&opts).unwrap();
+        assert_eq!(
+            files.len(),
+            1,
+            "symlink alias must be collapsed; got {files:?}"
+        );
+        let canonicals: Vec<_> = files
+            .iter()
+            .filter_map(|f| fs::canonicalize(f).ok())
+            .collect();
+        let distinct: std::collections::HashSet<_> = canonicals.iter().collect();
+        assert_eq!(
+            canonicals.len(),
+            distinct.len(),
+            "no canonical path should appear twice: {canonicals:?}"
+        );
+    }
+
+    /// **Adversarial**: Hard-linked files share an inode but have distinct
+    /// directory entries. They must also be deduped — per-path locking on
+    /// two hard links to the same inode races the same way symlinks do.
+    /// Unix-only: hard-link dedup uses `(dev, ino)`; non-Unix platforms use
+    /// canonical paths, which treat hard links as distinct.
+    #[cfg(unix)]
+    #[test]
+    fn hard_link_aliases_are_deduped_on_unix() {
+        let dir = tempfile::tempdir().unwrap();
+        let a = dir.path().join("first.txt");
+        let b = dir.path().join("second.txt");
+        fs::write(&a, "content\n").unwrap();
+        fs::hard_link(&a, &b).unwrap();
+
+        let opts = DiscoveryOptions {
+            root: dir.path().to_path_buf(),
+            glob: None,
+            ignore_pattern: None,
+            gitignore: false,
+            hidden: false,
+            max_depth: None,
+            follow_links: false,
+        };
+
+        let files = discover_files_parallel(&opts).unwrap();
+        assert_eq!(
+            files.len(),
+            1,
+            "hard-linked files must be collapsed to one entry on Unix; got {files:?}"
+        );
+    }
+
+    /// **Adversarial**: The serial walker must also dedupe (parity with the
+    /// parallel walker). A regression that applies dedup to only one path
+    /// would show up here.
+    #[cfg(unix)]
+    #[test]
+    fn symlink_alias_deduped_in_serial_walker() {
+        use std::os::unix::fs::symlink;
+
+        let dir = tempfile::tempdir().unwrap();
+        let real = dir.path().join("real.txt");
+        fs::write(&real, "content\n").unwrap();
+        let link = dir.path().join("alias.txt");
+        symlink(&real, &link).unwrap();
+
+        let opts = DiscoveryOptions {
+            root: dir.path().to_path_buf(),
+            glob: None,
+            ignore_pattern: None,
+            gitignore: false,
+            hidden: false,
+            max_depth: None,
+            follow_links: true,
+        };
+
+        let files = discover_files(&opts).unwrap();
+        assert_eq!(
+            files.len(),
+            1,
+            "serial walker must also dedup; got {files:?}"
+        );
+    }
+
+    // ---- Adversarial: ordering determinism ----
+
+    /// **Adversarial**: `discover_files_parallel` is required to return paths
+    /// in sorted order (post-sort at line 137). Without a deterministic order,
+    /// JSON output becomes non-reproducible and diffs of agent runs become
+    /// meaningless. This locks that in across multiple invocations.
+    #[test]
+    fn parallel_discovery_order_is_deterministic() {
+        let dir = tempfile::tempdir().unwrap();
+        // Files created in an order that is unlikely to match sort order.
+        for name in ["z.txt", "a.txt", "m.txt", "b.txt", "q.txt"] {
+            fs::write(dir.path().join(name), "hi\n").unwrap();
+        }
+
+        let opts = DiscoveryOptions {
+            root: dir.path().to_path_buf(),
+            glob: None,
+            ignore_pattern: None,
+            gitignore: false,
+            hidden: false,
+            max_depth: None,
+            follow_links: false,
+        };
+
+        let a = discover_files_parallel(&opts).unwrap();
+        let b = discover_files_parallel(&opts).unwrap();
+        let c = discover_files_parallel(&opts).unwrap();
+        assert_eq!(a, b, "repeated parallel discovery must be deterministic");
+        assert_eq!(b, c, "repeated parallel discovery must be deterministic");
+        // And must be sorted.
+        let mut sorted = a.clone();
+        sorted.sort();
+        assert_eq!(a, sorted, "parallel discovery must return sorted paths");
+    }
+
+    /// **Adversarial**: The binary-file filter reads only a small prefix
+    /// (8 KB). Opening a 2 GB binary file should not cause the discovery
+    /// pipeline to mmap or read the whole file. We verify this indirectly
+    /// by checking that discovery on a 2 MB binary file completes without
+    /// allocating a gigabyte of memory. This is a smoke test against a
+    /// potential performance regression.
+    #[test]
+    fn large_binary_file_is_filtered_without_full_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let big = dir.path().join("blob.bin");
+        // 2 MB of data with a NUL in the first 8 KB so it's marked binary.
+        let mut buf = vec![b'A'; 2 * 1024 * 1024];
+        buf[100] = 0;
+        fs::write(&big, &buf).unwrap();
+        fs::write(dir.path().join("text.txt"), "ok\n").unwrap();
+
+        let opts = DiscoveryOptions {
+            root: dir.path().to_path_buf(),
+            glob: None,
+            ignore_pattern: None,
+            gitignore: false,
+            hidden: false,
+            max_depth: None,
+            follow_links: false,
+        };
+
+        let start = std::time::Instant::now();
+        let files = discover_files_parallel(&opts).unwrap();
+        let elapsed = start.elapsed();
+
+        assert_eq!(files.len(), 1, "only the text file should be returned");
+        assert!(files[0].ends_with("text.txt"));
+        // Generous bound — a full read of 2 MB would likely still be fast,
+        // but if someone regresses this to an mmap-based check we'd still
+        // want a signal.
+        assert!(
+            elapsed < std::time::Duration::from_secs(2),
+            "binary filtering took {elapsed:?} — possible full-file read regression"
+        );
     }
 }

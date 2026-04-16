@@ -5,9 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.8] - 2026-04-16
+
+### Fixed
+- Fix FileLock mutual exclusion race under concurrent acquire. The previous
+  `O_CREAT|O_EXCL` + PID-staleness approach had an inherent window where
+  another thread could observe the empty lock file between `create_new`
+  and `writeln!(pid)`, declare it stale, remove it, and create its own —
+  producing two concurrent "holders" and silently losing writes.
+  `FileLock::acquire` now uses kernel-level file locking (`flock(2)` on
+  Unix, `LockFileEx` on Windows) on a persistent sentinel, guaranteeing
+  atomic mutual exclusion. The lock file's PID/timestamp content is
+  purely informational.
+- Fix engine producing `"\n"` (a file with one empty line) instead of
+  `""` (an empty file) when a Delete operation removes every line of
+  a one-line file. Regression surfaced by a new proptest.
+- Fix symlink and hard-link aliases causing the same inode to be
+  discovered twice by `discover_files` / `discover_files_parallel`.
+  Two paths to the same inode would take out separate per-path locks
+  in `ripsed::apply_to_file` and race each other. Paths are now
+  deduplicated by `(dev, ino)` on Unix and by canonical path elsewhere.
+
+### Added
+- Property-based (proptest) tests in `ripsed-core`: line-number
+  invariants (ascending, 1-indexed, in-bounds), exact delete-line-count,
+  CRLF majority preservation, Replace change-count vs. containing-lines,
+  no-trailing-newline preservation, literal-match equivalence,
+  case-insensitive ASCII symmetry.
+- Concurrent integration tests in `crates/ripsed/tests/concurrent_write_test.rs`
+  exercising `apply_to_file` under heavy contention (distinct
+  replacements, idempotent replacement, dry-run safety, reader/writer
+  races).
+- Real atomic-batch rollback test in `ripsed-fs::writer` — forces a
+  commit-phase failure and verifies already-persisted files are
+  restored to their pre-commit content.
+- Symlink-scope safety tests in `ripsed-fs::discovery` (Unix): external
+  targets are NOT followed by default, and alias paths deduplicate
+  to one entry.
+- Pathological-pattern tests in `ripsed-core::matcher`: literal `$1`,
+  regex backreferences, ReDoS-safety smoke test, control-char
+  replacements, empty-regex-match safety.
+- `no_concurrent_holders_under_hammer` hammer test in `ripsed-fs::lock`
+  as a direct mutual-exclusion regression guard.
+
+### Removed
+- Tautological serde-roundtrip tests in `ripsed-core` (`Op` roundtrips,
+  accessor-over-field tests) and `ripsed-json` (request/schema
+  roundtrip). Replaced where meaningful with wire-format-locking
+  tests (`replace_op_tag_wire_format`, `transform_mode_wire_names`).
+- PID-staleness scaffolding in `ripsed-fs::lock` (`is_lock_stale`,
+  `is_process_alive`, `is_older_than`, `EMPTY_LOCK_GRACE`). No
+  longer needed now that mutual exclusion is enforced by the kernel
+  via `flock`/`LockFileEx`.
+
 ## [0.2.7] - 2026-03-28
 
 ### Fixed
+- Fix lock acquisition in dry_run mode creating unwanted lock files (#81)
 - Fix stale lock tests failing on Windows due to conservative is_process_alive (#76)
 - Fix flaky lock tests in CI (concurrent race, tempdir lifetime) (#75)
 - Fix lock staleness check failing on macOS due to /proc not existing (#71)

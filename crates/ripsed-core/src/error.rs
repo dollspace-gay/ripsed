@@ -241,26 +241,6 @@ mod tests {
         assert_eq!(json, r#""binary_file_skipped""#);
     }
 
-    #[test]
-    fn error_code_roundtrips_all_variants() {
-        let codes = [
-            ErrorCode::NoMatches,
-            ErrorCode::InvalidRegex,
-            ErrorCode::InvalidRequest,
-            ErrorCode::FileNotFound,
-            ErrorCode::PermissionDenied,
-            ErrorCode::BinaryFileSkipped,
-            ErrorCode::AtomicRollback,
-            ErrorCode::WriteFailed,
-            ErrorCode::InternalError,
-        ];
-        for code in &codes {
-            let json = serde_json::to_string(code).unwrap();
-            let deserialized: ErrorCode = serde_json::from_str(&json).unwrap();
-            assert_eq!(*code, deserialized);
-        }
-    }
-
     // ── Factory methods ──
 
     #[test]

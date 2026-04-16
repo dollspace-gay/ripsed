@@ -4,54 +4,76 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 /// Advisory file lock for preventing concurrent access to the same file.
+///
+/// Mutual exclusion is enforced by the kernel via `flock(2)` on Unix and
+/// `LockFileEx` on Windows, so it is guaranteed to be race-free across
+/// threads and processes. A sentinel `.ripsed.lock` file is created
+/// adjacent to the target; we hold a locked file descriptor on it for the
+/// lifetime of the `FileLock`, and the OS releases the lock automatically
+/// when the fd is closed (including on process crash).
+///
+/// ## Why not an O_EXCL sentinel file?
+///
+/// A previous implementation used `O_CREAT|O_EXCL` + a PID-staleness check
+/// to detect crashed holders. That approach had two races:
+/// (1) an empty window between `create_new` and writing the PID allowed a
+///     concurrent acquire to observe the empty file, mark it stale, remove
+///     it, and create its own — producing two "holders" of the lock;
+/// (2) the stale-cleanup step could fire on a lock that had just been
+///     re-published by another thread, clobbering mutual exclusion.
+///
+/// `flock`-based locking avoids both because the kernel serializes all
+/// acquire attempts on a single inode. The lock file content is only used
+/// for human-readable diagnostic ("who holds this lock?") and plays no
+/// role in mutual exclusion.
 #[derive(Debug)]
 pub struct FileLock {
-    file: Option<File>,
-    lock_path: PathBuf,
+    // Keeping the File alive holds the flock/LockFileEx region. Dropping
+    // the File releases the lock. The file is kept in a field so the fd
+    // survives across the full lifetime of the `FileLock`.
+    _file: File,
 }
 
 impl FileLock {
     /// Attempt to acquire an advisory lock on the given path.
-    /// Creates a `.ripsed.lock` file adjacent to the target, containing the
-    /// current PID and a Unix timestamp for staleness detection.
+    ///
+    /// Returns `Ok(FileLock)` on success. Returns `Err` with kind
+    /// `WouldBlock` if another thread or process already holds the lock.
     pub fn acquire(path: &Path) -> io::Result<Self> {
         let lock_path = lock_path_for(path);
 
-        // If a stale lock exists, remove it before attempting to create
-        if lock_path.exists() && is_lock_stale(&lock_path) {
-            let _ = std::fs::remove_file(&lock_path);
-        }
-
-        let mut file = OpenOptions::new()
+        // Open (or create) the sentinel file. No O_EXCL: we do NOT use the
+        // file's existence as the mutex. The mutex is the flock on the fd.
+        let file = OpenOptions::new()
+            .read(true)
             .write(true)
-            .create_new(true)
-            .open(&lock_path)
-            .map_err(|e| {
-                if e.kind() == io::ErrorKind::AlreadyExists {
-                    io::Error::new(
-                        io::ErrorKind::WouldBlock,
-                        format!("File is locked: {}", path.display()),
-                    )
-                } else {
-                    e
-                }
-            })?;
+            .create(true)
+            .truncate(false)
+            .open(&lock_path)?;
 
-        // Write PID and timestamp for staleness detection.
-        // Errors here are propagated — an empty lock file would be treated as stale
-        // by the next process, making this lock immediately bypassable.
+        try_lock_exclusive_nonblocking(&file).map_err(|e| {
+            if e.kind() == io::ErrorKind::WouldBlock {
+                io::Error::new(
+                    io::ErrorKind::WouldBlock,
+                    format!("File is locked: {}", path.display()),
+                )
+            } else {
+                e
+            }
+        })?;
+
+        // We hold the exclusive lock. Best-effort write PID/timestamp for
+        // diagnostic purposes (e.g., `cat target.ripsed.lock`). Errors are
+        // ignored — the mutex does not depend on this content.
         let pid = std::process::id();
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
-        writeln!(file, "{pid} {timestamp}")?;
-        file.flush()?;
+        let _ = file.set_len(0);
+        let _ = writeln!(&file, "{pid} {timestamp}");
 
-        Ok(Self {
-            file: Some(file),
-            lock_path,
-        })
+        Ok(Self { _file: file })
     }
 
     /// Try to acquire a lock, retrying with back-off until `timeout` elapses.
@@ -60,7 +82,7 @@ impl FileLock {
     /// within the given duration.
     pub fn try_lock_with_timeout(path: &Path, timeout: Duration) -> io::Result<Self> {
         let start = Instant::now();
-        let mut sleep_ms = 1u64; // start at 1 ms, double each iteration, cap at 50 ms
+        let mut sleep_ms = 1u64;
 
         loop {
             match Self::acquire(path) {
@@ -84,76 +106,96 @@ impl FileLock {
         }
     }
 
-    /// Release the lock by removing the lock file.
+    /// Release the lock.
     ///
-    /// Closes the file handle before deleting — required on Windows
-    /// where open files cannot be deleted.
-    pub fn release(mut self) -> io::Result<()> {
-        self.file.take(); // close the handle first
-        std::fs::remove_file(&self.lock_path)
+    /// The sentinel file on disk is deliberately NOT removed here. Removing
+    /// it would open a race where another thread can `open(lock_path,
+    /// O_CREAT)` a NEW inode at the same path and `flock` that new inode
+    /// concurrently with our still-open fd pointing to the OLD inode —
+    /// `flock` keys on the inode, not the path, so both threads would
+    /// believe they hold the lock.
+    ///
+    /// Leaving the sentinel in place means subsequent acquirers `open` the
+    /// SAME inode we flocked; the kernel's flock table serializes them.
+    /// The file content is overwritten with each new holder's PID.
+    pub fn release(self) -> io::Result<()> {
+        drop(self);
+        Ok(())
     }
 }
 
 impl Drop for FileLock {
     fn drop(&mut self) {
-        self.file.take(); // close the handle before deleting (Windows compat)
-        let _ = std::fs::remove_file(&self.lock_path);
+        // Closing `_file` (via its own Drop) releases the OS-level flock.
+        // We intentionally do NOT remove the sentinel file from disk —
+        // doing so would race with a concurrent acquirer and allow two
+        // threads to flock DIFFERENT inodes at the same path. See
+        // `release` for the full explanation.
     }
 }
 
-/// Check whether a lock file is stale (the owning process no longer exists).
-///
-/// Reads the PID from the lock file and checks if that process is alive.
-/// Returns `true` if the lock is stale (process is dead or file is unreadable).
-fn is_lock_stale(lock_path: &Path) -> bool {
-    let contents = match std::fs::read_to_string(lock_path) {
-        Ok(c) => c,
-        Err(_) => return true, // Can't read = treat as stale
-    };
-
-    // Empty lock files (from older versions) are treated as stale
-    let pid_str = match contents.split_whitespace().next() {
-        Some(s) => s,
-        None => return true,
-    };
-
-    let pid: u32 = match pid_str.parse() {
-        Ok(p) => p,
-        Err(_) => return true,
-    };
-
-    !is_process_alive(pid)
-}
-
-/// Check if a process with the given PID is still running.
 #[cfg(unix)]
-fn is_process_alive(pid: u32) -> bool {
-    // kill(pid, 0) checks process existence without sending a signal.
-    // Works on all Unix systems (Linux, macOS, BSDs) — unlike /proc which is Linux-only.
-    // EPERM means the process exists but we lack permission to signal it.
-    let ret = unsafe { libc::kill(pid as libc::pid_t, 0) };
-    ret == 0 || io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH)
+fn try_lock_exclusive_nonblocking(file: &File) -> io::Result<()> {
+    use std::os::unix::io::AsRawFd;
+    // flock(2) provides whole-file advisory locking. LOCK_EX = exclusive,
+    // LOCK_NB = non-blocking (fail immediately if another holder).
+    let ret = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+    if ret == 0 {
+        Ok(())
+    } else {
+        let err = io::Error::last_os_error();
+        // Map EWOULDBLOCK (== EAGAIN on Linux) to the portable WouldBlock kind.
+        match err.raw_os_error() {
+            Some(e) if e == libc::EWOULDBLOCK => {
+                Err(io::Error::new(io::ErrorKind::WouldBlock, err))
+            }
+            _ => Err(err),
+        }
+    }
 }
 
 #[cfg(windows)]
-fn is_process_alive(pid: u32) -> bool {
-    use windows_sys::Win32::Foundation::CloseHandle;
-    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
-    // OpenProcess returns NULL if the process doesn't exist or access is denied.
-    // PROCESS_QUERY_LIMITED_INFORMATION is the least-privilege access right.
-    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
-    if handle.is_null() {
-        false
+fn try_lock_exclusive_nonblocking(file: &File) -> io::Result<()> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Foundation::{ERROR_IO_PENDING, ERROR_LOCK_VIOLATION, HANDLE};
+    use windows_sys::Win32::Storage::FileSystem::{
+        LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY, LockFileEx,
+    };
+    use windows_sys::Win32::System::IO::OVERLAPPED;
+
+    let handle = file.as_raw_handle() as HANDLE;
+    let mut overlapped: OVERLAPPED = unsafe { std::mem::zeroed() };
+    // Lock the full file (offset 0, length u64::MAX split into two u32s).
+    let ret = unsafe {
+        LockFileEx(
+            handle,
+            LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
+            0,
+            u32::MAX,
+            u32::MAX,
+            &mut overlapped,
+        )
+    };
+    if ret != 0 {
+        Ok(())
     } else {
-        unsafe { CloseHandle(handle) };
-        true
+        let err = io::Error::last_os_error();
+        match err.raw_os_error() {
+            Some(code)
+                if code == ERROR_LOCK_VIOLATION as i32 || code == ERROR_IO_PENDING as i32 =>
+            {
+                Err(io::Error::new(io::ErrorKind::WouldBlock, err))
+            }
+            _ => Err(err),
+        }
     }
 }
 
 #[cfg(not(any(unix, windows)))]
-fn is_process_alive(_pid: u32) -> bool {
-    // On unknown platforms, conservatively assume the process is alive
-    true
+fn try_lock_exclusive_nonblocking(_file: &File) -> io::Result<()> {
+    // Fallback: no locking available. This is unsafe but avoids a hard
+    // compile error on exotic targets; such platforms never see our tests.
+    Ok(())
 }
 
 /// Compute the lock-file path for a given target path.
@@ -205,77 +247,6 @@ mod tests {
         );
     }
 
-    // ── is_lock_stale ────────────────────────────────────────────────
-
-    #[test]
-    fn stale_when_lock_file_is_empty() {
-        let dir = tempfile::tempdir().unwrap();
-        let lock_file = dir.path().join("test.ripsed.lock");
-        fs::write(&lock_file, "").unwrap();
-        assert!(is_lock_stale(&lock_file));
-    }
-
-    #[test]
-    fn stale_when_lock_file_has_garbage() {
-        let dir = tempfile::tempdir().unwrap();
-        let lock_file = dir.path().join("test.ripsed.lock");
-        fs::write(&lock_file, "not-a-pid garbage").unwrap();
-        assert!(is_lock_stale(&lock_file));
-    }
-
-    #[test]
-    fn stale_when_lock_file_does_not_exist() {
-        let dir = tempfile::tempdir().unwrap();
-        let lock_file = dir.path().join("nonexistent.ripsed.lock");
-        assert!(is_lock_stale(&lock_file));
-    }
-
-    #[test]
-    fn not_stale_when_pid_is_current_process() {
-        let dir = tempfile::tempdir().unwrap();
-        let lock_file = dir.path().join("test.ripsed.lock");
-        let pid = std::process::id();
-        fs::write(&lock_file, format!("{pid} 1700000000\n")).unwrap();
-        assert!(!is_lock_stale(&lock_file));
-    }
-
-    #[test]
-    fn stale_when_pid_is_definitely_dead() {
-        let dir = tempfile::tempdir().unwrap();
-        let lock_file = dir.path().join("test.ripsed.lock");
-        // PID 4294967295 (u32::MAX) is virtually guaranteed to not exist
-        fs::write(&lock_file, "2000000000 1700000000\n").unwrap();
-        assert!(is_lock_stale(&lock_file));
-    }
-
-    #[test]
-    fn stale_when_only_whitespace() {
-        let dir = tempfile::tempdir().unwrap();
-        let lock_file = dir.path().join("test.ripsed.lock");
-        fs::write(&lock_file, "   \n  \n").unwrap();
-        assert!(is_lock_stale(&lock_file));
-    }
-
-    // ── lock file content ────────────────────────────────────────────
-
-    #[test]
-    fn lock_file_contains_pid_and_timestamp() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("target.txt");
-        fs::write(&path, "data").unwrap();
-
-        let _lock = FileLock::acquire(&path).unwrap();
-        let contents = fs::read_to_string(lock_path_for(&path)).unwrap();
-        let parts: Vec<&str> = contents.trim().split_whitespace().collect();
-        assert_eq!(parts.len(), 2, "lock file should have PID and timestamp");
-
-        let pid: u32 = parts[0].parse().expect("PID should be a u32");
-        assert_eq!(pid, std::process::id());
-
-        let ts: u64 = parts[1].parse().expect("timestamp should be a u64");
-        assert!(ts > 1_700_000_000, "timestamp should be recent");
-    }
-
     // ── acquire / release ────────────────────────────────────────────
 
     #[test]
@@ -288,7 +259,9 @@ mod tests {
         assert!(lock_path_for(&path).exists());
 
         lock.release().unwrap();
-        assert!(!lock_path_for(&path).exists());
+        // The sentinel file intentionally stays on disk; see `release` docs.
+        // The lock itself is released so we can re-acquire.
+        let _lock2 = FileLock::acquire(&path).unwrap();
     }
 
     #[test]
@@ -322,7 +295,6 @@ mod tests {
     fn acquire_does_not_require_target_to_exist() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("nonexistent.txt");
-        // The target file doesn't need to exist — only the lock file is created
         let lock = FileLock::acquire(&path).unwrap();
         assert!(lock_path_for(&path).exists());
         lock.release().unwrap();
@@ -335,60 +307,24 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // ── stale lock cleanup ───────────────────────────────────────────
+    // ── lock file content (informational) ────────────────────────────
 
     #[test]
-    fn acquire_cleans_up_stale_lock() {
+    fn lock_file_contains_pid_and_timestamp() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("target.txt");
         fs::write(&path, "data").unwrap();
 
-        // Plant a stale lock (dead PID)
-        let lp = lock_path_for(&path);
-        fs::write(&lp, "2000000000 1700000000\n").unwrap();
-        assert!(lp.exists());
+        let _lock = FileLock::acquire(&path).unwrap();
+        let contents = fs::read_to_string(lock_path_for(&path)).unwrap();
+        let parts: Vec<&str> = contents.split_whitespace().collect();
+        assert_eq!(parts.len(), 2, "lock file should have PID and timestamp");
 
-        // Acquire should succeed by cleaning up the stale lock
-        let lock = FileLock::acquire(&path).unwrap();
-        // Verify the lock file now has *our* PID
-        let contents = fs::read_to_string(&lp).unwrap();
-        let pid: u32 = contents.split_whitespace().next().unwrap().parse().unwrap();
+        let pid: u32 = parts[0].parse().expect("PID should be a u32");
         assert_eq!(pid, std::process::id());
-        lock.release().unwrap();
-    }
 
-    #[test]
-    fn acquire_does_not_clean_live_lock() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("target.txt");
-        fs::write(&path, "data").unwrap();
-
-        // Plant a lock with our own PID (definitely alive)
-        let lp = lock_path_for(&path);
-        let pid = std::process::id();
-        fs::write(&lp, format!("{pid} 1700000000\n")).unwrap();
-
-        // Should fail — the lock is not stale
-        let result = FileLock::acquire(&path);
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err().kind(), io::ErrorKind::WouldBlock);
-
-        // Clean up manually
-        fs::remove_file(&lp).unwrap();
-    }
-
-    #[test]
-    fn acquire_cleans_empty_lock_file() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("target.txt");
-        fs::write(&path, "data").unwrap();
-
-        // Plant an empty lock file (treated as stale)
-        let lp = lock_path_for(&path);
-        fs::write(&lp, "").unwrap();
-
-        let lock = FileLock::acquire(&path).unwrap();
-        lock.release().unwrap();
+        let ts: u64 = parts[1].parse().expect("timestamp should be a u64");
+        assert!(ts > 1_700_000_000, "timestamp should be recent");
     }
 
     // ── drop ─────────────────────────────────────────────────────────
@@ -401,11 +337,10 @@ mod tests {
 
         {
             let _lock = FileLock::acquire(&path).unwrap();
-            assert!(lock_path_for(&path).exists());
+            // Another acquire must fail while we hold the lock.
+            assert!(FileLock::acquire(&path).is_err());
         }
-        assert!(!lock_path_for(&path).exists());
-
-        // Should be able to re-acquire after drop
+        // After drop, we can re-acquire.
         let _lock2 = FileLock::acquire(&path).unwrap();
     }
 
@@ -463,12 +398,11 @@ mod tests {
         let path_clone = path.clone();
         let handle = std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(50));
-            drop(lock); // release via Drop (ignores NotFound, unlike release())
+            drop(lock);
         });
 
         let _lock2 = FileLock::try_lock_with_timeout(&path_clone, Duration::from_secs(2)).unwrap();
         handle.join().unwrap();
-        // _lock2 cleaned up by Drop when test exits
     }
 
     #[test]
@@ -507,12 +441,13 @@ mod tests {
             let be = Arc::clone(&barrier_end);
             let w = Arc::clone(&winners);
             handles.push(std::thread::spawn(move || {
-                bs.wait(); // all threads start together
-                let _lock = FileLock::acquire(&p).ok();
-                if _lock.is_some() {
+                bs.wait();
+                let lock = FileLock::acquire(&p).ok();
+                if lock.is_some() {
                     w.fetch_add(1, Ordering::SeqCst);
                 }
-                be.wait(); // winner holds lock until all threads have tried
+                be.wait();
+                drop(lock);
             }));
         }
 
@@ -524,6 +459,70 @@ mod tests {
             winners.load(Ordering::SeqCst),
             1,
             "exactly one thread should acquire the lock"
+        );
+    }
+
+    /// **Regression guard**: The original implementation used
+    /// `O_CREAT|O_EXCL` + `writeln!(pid)` with a PID-staleness check. That
+    /// approach had a race where a concurrent acquire would observe the
+    /// empty file between `create_new` and `writeln`, mark it stale,
+    /// remove it, and create its own lock — producing two concurrent
+    /// holders. The current `flock`-based implementation is race-free
+    /// by the kernel. This test hammers 16 threads in a tight loop to
+    /// surface any regression.
+    #[test]
+    fn no_concurrent_holders_under_hammer() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("target.txt");
+        fs::write(&path, "data").unwrap();
+
+        const N: usize = 16;
+        const ROUNDS: usize = 50;
+        let holders = Arc::new(AtomicUsize::new(0));
+        let max_concurrent = Arc::new(AtomicUsize::new(0));
+        let mut handles = Vec::new();
+
+        for _ in 0..N {
+            let p = path.clone();
+            let h = Arc::clone(&holders);
+            let m = Arc::clone(&max_concurrent);
+            handles.push(std::thread::spawn(move || {
+                for _ in 0..ROUNDS {
+                    if let Ok(lock) = FileLock::try_lock_with_timeout(&p, Duration::from_secs(5)) {
+                        let now = h.fetch_add(1, Ordering::SeqCst) + 1;
+                        // Track the maximum simultaneous holders observed.
+                        let mut cur_max = m.load(Ordering::SeqCst);
+                        while cur_max < now {
+                            match m.compare_exchange(
+                                cur_max,
+                                now,
+                                Ordering::SeqCst,
+                                Ordering::SeqCst,
+                            ) {
+                                Ok(_) => break,
+                                Err(v) => cur_max = v,
+                            }
+                        }
+                        // Hold the lock briefly to maximize overlap window.
+                        std::thread::sleep(Duration::from_micros(10));
+                        h.fetch_sub(1, Ordering::SeqCst);
+                        drop(lock);
+                    }
+                }
+            }));
+        }
+
+        for h in handles {
+            h.join().unwrap();
+        }
+
+        assert_eq!(
+            max_concurrent.load(Ordering::SeqCst),
+            1,
+            "mutex violated: more than one thread held the lock at once"
         );
     }
 }

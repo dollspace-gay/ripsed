@@ -1055,29 +1055,4 @@ mod tests {
         let req = JsonRequest::parse(input).unwrap();
         assert_eq!(req.undo.unwrap().last, 1);
     }
-
-    // ── Serialization roundtrip ──
-
-    #[test]
-    fn test_serialize_then_parse_roundtrip() {
-        let request = JsonRequest {
-            version: "1".to_string(),
-            operations: vec![JsonOp {
-                op: Op::Replace {
-                    find: "foo".to_string(),
-                    replace: "bar".to_string(),
-                    regex: false,
-                    case_insensitive: false,
-                },
-                glob: Some("**/*.rs".to_string()),
-            }],
-            options: OpOptions::default(),
-            undo: None,
-            extra: serde_json::Map::new(),
-        };
-        let json = serde_json::to_string(&request).unwrap();
-        let parsed = JsonRequest::parse(&json).unwrap();
-        assert_eq!(parsed.operations.len(), 1);
-        assert_eq!(parsed.operations[0].glob.as_deref(), Some("**/*.rs"));
-    }
 }

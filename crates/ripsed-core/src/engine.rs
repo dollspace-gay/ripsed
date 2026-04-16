@@ -327,9 +327,11 @@ pub fn apply(
     let modified_text = if changes.is_empty() {
         None
     } else {
-        // Preserve line ending style and trailing newline
+        // Preserve line ending style and trailing newline — but only when
+        // the result has content. If every line was deleted, the output is
+        // a genuinely empty file, not a file containing a single empty line.
         let mut joined = result_lines.join(line_sep);
-        if text.ends_with('\n') || text.ends_with("\r\n") {
+        if !result_lines.is_empty() && (text.ends_with('\n') || text.ends_with("\r\n")) {
             joined.push_str(line_sep);
         }
         Some(joined)
@@ -1751,6 +1753,139 @@ mod tests {
         let output = result.text.unwrap();
         assert_eq!(text.lines().count(), output.lines().count());
     }
+
+    // ---------------------------------------------------------------
+    // Adversarial: line number correctness under odd line endings
+    // ---------------------------------------------------------------
+
+    /// **Adversarial**: in a file with mixed line endings, the change
+    /// reported for line 3 should correspond to the THIRD *logical line*
+    /// (1-indexed), not a byte offset or a line under some alternative
+    /// counting scheme. Agents use this line number to navigate.
+    #[test]
+    fn test_line_numbers_with_mixed_line_endings() {
+        // Line 1 = "alpha" (LF)
+        // Line 2 = "beta" (CRLF)
+        // Line 3 = "gamma match" (LF) — this is where the change should be reported
+        // Line 4 = "delta" (CRLF)
+        let text = "alpha\nbeta\r\ngamma match\ndelta\r\n";
+        let op = Op::Replace {
+            find: "match".to_string(),
+            replace: "HIT".to_string(),
+            regex: false,
+            case_insensitive: false,
+        };
+        let matcher = Matcher::new(&op).unwrap();
+        let result = apply(text, &op, &matcher, None, 0).unwrap();
+        assert_eq!(result.changes.len(), 1);
+        assert_eq!(
+            result.changes[0].line, 3,
+            "Line number must be 3 regardless of the mixed CR/LF / CRLF endings above it; got {}",
+            result.changes[0].line
+        );
+        assert_eq!(result.changes[0].before, "gamma match");
+    }
+
+    /// **Adversarial**: a file consisting entirely of a single line without
+    /// any trailing newline still has "line 1" — if that line matches, the
+    /// reported change must be on line 1.
+    #[test]
+    fn test_line_number_for_single_line_no_newline() {
+        let text = "only line matches here";
+        let op = Op::Replace {
+            find: "matches".to_string(),
+            replace: "OK".to_string(),
+            regex: false,
+            case_insensitive: false,
+        };
+        let matcher = Matcher::new(&op).unwrap();
+        let result = apply(text, &op, &matcher, None, 0).unwrap();
+        assert_eq!(result.changes.len(), 1);
+        assert_eq!(result.changes[0].line, 1);
+    }
+
+    /// **Adversarial**: the first line of a file, when matched, must be
+    /// reported as line 1, not line 0 (off-by-one regression guard).
+    #[test]
+    fn test_first_line_is_one_not_zero() {
+        let text = "match first\nother\nother\n";
+        let op = Op::Replace {
+            find: "match".to_string(),
+            replace: "X".to_string(),
+            regex: false,
+            case_insensitive: false,
+        };
+        let matcher = Matcher::new(&op).unwrap();
+        let result = apply(text, &op, &matcher, None, 0).unwrap();
+        assert_eq!(
+            result.changes[0].line, 1,
+            "First-line change must be reported as line 1, not 0"
+        );
+    }
+
+    /// **Adversarial**: when a Delete operation removes the middle line of
+    /// a three-line file, the single reported change must reference the
+    /// DELETED line's original line number (2), not the new position of
+    /// the following line. Undo needs this invariant to restore correctly.
+    #[test]
+    fn test_delete_reports_original_line_number() {
+        let text = "keep1\ndelete_me\nkeep2\n";
+        let op = Op::Delete {
+            find: "delete_me".to_string(),
+            regex: false,
+            case_insensitive: false,
+        };
+        let matcher = Matcher::new(&op).unwrap();
+        let result = apply(text, &op, &matcher, None, 0).unwrap();
+        assert_eq!(result.changes.len(), 1);
+        assert_eq!(
+            result.changes[0].line, 2,
+            "Deleted line's reported line must be its original position (2)"
+        );
+        assert_eq!(result.changes[0].before, "delete_me");
+        assert_eq!(result.changes[0].after, None);
+    }
+
+    /// **Adversarial regression**: deleting the single line of a one-line
+    /// file must produce an empty file (""), not a file containing one
+    /// empty line ("\n"). The old engine preserved the trailing newline
+    /// unconditionally, which inverted the POSIX "non-existent file vs.
+    /// file with empty line" distinction — `wc -l` would say "1" for a
+    /// file the user thought they had emptied.
+    #[test]
+    fn test_delete_all_lines_produces_empty_file() {
+        let text = "only line\n";
+        let op = Op::Delete {
+            find: "only".to_string(),
+            regex: false,
+            case_insensitive: false,
+        };
+        let matcher = Matcher::new(&op).unwrap();
+        let result = apply(text, &op, &matcher, None, 0).unwrap();
+        let output = result.text.unwrap();
+        assert_eq!(
+            output, "",
+            "Deleting every line must yield an empty file, got {output:?}"
+        );
+    }
+
+    /// Same invariant for CRLF input.
+    #[test]
+    fn test_delete_all_lines_crlf_produces_empty_file() {
+        let text = "only line\r\n";
+        let op = Op::Delete {
+            find: "only".to_string(),
+            regex: false,
+            case_insensitive: false,
+        };
+        let matcher = Matcher::new(&op).unwrap();
+        let result = apply(text, &op, &matcher, None, 0).unwrap();
+        let output = result.text.unwrap();
+        assert_eq!(
+            output, "",
+            "Deleting every CRLF line must yield an empty file"
+        );
+    }
 }
 
 // ---------------------------------------------------------------
@@ -2017,6 +2152,205 @@ mod proptests {
                     "Indent should preserve line count: input={} output={}",
                     input_lines,
                     output_lines
+                );
+            }
+        }
+
+        /// **Adversarial**: Line numbers recorded in `changes` must be
+        /// 1-indexed, strictly within the input's line bounds, and in
+        /// ascending order. A violation would break agent tooling that
+        /// depends on line numbers to navigate output.
+        #[test]
+        fn prop_change_lines_ascending_and_in_bounds(
+            text in arb_multiline_text(),
+            find in arb_find_pattern(),
+            replace in "[a-zA-Z0-9]{0,8}",
+        ) {
+            let op = Op::Replace {
+                find,
+                replace,
+                regex: false,
+                case_insensitive: false,
+            };
+            let matcher = Matcher::new(&op).unwrap();
+            let result = apply(&text, &op, &matcher, None, 0).unwrap();
+            let max_line = text.lines().count();
+            let mut prev: usize = 0;
+            for change in &result.changes {
+                prop_assert!(change.line >= 1, "Line numbers must be 1-indexed, got {}", change.line);
+                prop_assert!(
+                    change.line <= max_line,
+                    "Line {} out of input range (max {})",
+                    change.line,
+                    max_line
+                );
+                prop_assert!(
+                    change.line > prev,
+                    "Changes must be strictly ascending by line: prev={} current={}",
+                    prev,
+                    change.line
+                );
+                prev = change.line;
+            }
+        }
+
+        /// **Adversarial**: Delete should reduce line count by exactly
+        /// the number of matching lines. If the engine ever deletes one
+        /// line too many or too few, this will catch it.
+        #[test]
+        fn prop_delete_exact_line_count(
+            // Find must be alphanumeric; we use pure-punctuation filler lines
+            // (guaranteed disjoint from the find character class) to avoid
+            // accidental matches in "non-matching" lines.
+            find in arb_find_pattern(),
+            match_count in 0usize..=8,
+            nonmatch_count in 0usize..=8,
+        ) {
+            let match_lines: Vec<String> = (0..match_count)
+                .map(|_| format!("-- {} --", find))
+                .collect();
+            // Filler chars are punctuation only — cannot contain any char
+            // from [a-zA-Z0-9], so they cannot contain the find pattern.
+            let nonmatch_lines: Vec<String> = (0..nonmatch_count)
+                .map(|_| "--- filler ---".to_string())
+                .collect();
+            // Assert our filler hypothesis before running the engine.
+            for l in &nonmatch_lines {
+                prop_assume!(!l.contains(&find));
+            }
+            // Interleave deterministically.
+            let mut merged = Vec::with_capacity(match_count + nonmatch_count);
+            let mut mi = match_lines.iter();
+            let mut ni = nonmatch_lines.iter();
+            loop {
+                let m = mi.next();
+                let n = ni.next();
+                if m.is_none() && n.is_none() { break; }
+                if let Some(m) = m { merged.push(m.clone()); }
+                if let Some(n) = n { merged.push(n.clone()); }
+            }
+            if merged.is_empty() {
+                // Degenerate: no lines at all — nothing interesting to test.
+                return Ok(());
+            }
+            let text = merged.join("\n") + "\n";
+
+            let op = Op::Delete {
+                find: find.clone(),
+                regex: false,
+                case_insensitive: false,
+            };
+            let matcher = Matcher::new(&op).unwrap();
+            let result = apply(&text, &op, &matcher, None, 0).unwrap();
+
+            let expected_deletions: usize = text.lines().filter(|l| l.contains(&find)).count();
+            prop_assert_eq!(
+                expected_deletions,
+                match_count,
+                "test construction bug: matcher-count must equal match_count"
+            );
+
+            if expected_deletions == 0 {
+                prop_assert!(result.text.is_none());
+                prop_assert!(result.changes.is_empty());
+            } else {
+                let input_lines = text.lines().count();
+                let output_lines = result.text.as_ref().unwrap().lines().count();
+                prop_assert_eq!(
+                    input_lines - expected_deletions,
+                    output_lines,
+                    "Delete removed wrong number of lines: expected {} - {} = {}, got {}",
+                    input_lines,
+                    expected_deletions,
+                    input_lines - expected_deletions,
+                    output_lines
+                );
+                prop_assert_eq!(result.changes.len(), expected_deletions);
+            }
+        }
+
+        /// **Adversarial**: CRLF-majority input produces CRLF-majority output
+        /// under any Replace that does not embed newlines. Regression guard
+        /// for the uses_crlf majority-vote logic.
+        #[test]
+        fn prop_crlf_majority_preserved(
+            find in "[a-zA-Z]{1,6}",
+            replace in "[a-zA-Z]{0,6}",
+        ) {
+            // Build heavily-CRLF text with enough matches that the replace
+            // doesn't turn into a no-op.
+            let text = format!(
+                "line {find} one\r\n{find} middle\r\nanother {find} here\r\nending\r\n"
+            );
+            let op = Op::Replace {
+                find: find.clone(),
+                replace,
+                regex: false,
+                case_insensitive: false,
+            };
+            let matcher = Matcher::new(&op).unwrap();
+            let result = apply(&text, &op, &matcher, None, 0).unwrap();
+            if let Some(ref output) = result.text {
+                let crlf = output.matches("\r\n").count();
+                let bare_lf = output.matches('\n').count() - crlf;
+                prop_assert!(
+                    crlf > bare_lf,
+                    "CRLF majority lost: {crlf} CRLF vs {bare_lf} bare LF in {output:?}"
+                );
+            }
+        }
+
+        /// **Adversarial**: The count of recorded changes under Replace must
+        /// equal the number of input lines that contain the find pattern.
+        /// (Replace changes at most one line per match-line, because replacements
+        /// are intra-line.) This catches double-counting and missed matches.
+        #[test]
+        fn prop_replace_change_count_matches_containing_lines(
+            find in arb_find_pattern(),
+            replace in "[a-zA-Z]{0,8}",
+        ) {
+            // Build a text with a known, nonzero number of lines containing the pattern.
+            let text = format!(
+                "head\n{find} one\nmiddle\n{find} two {find}\ntail\n"
+            );
+            let op = Op::Replace {
+                find: find.clone(),
+                replace,
+                regex: false,
+                case_insensitive: false,
+            };
+            let matcher = Matcher::new(&op).unwrap();
+            let result = apply(&text, &op, &matcher, None, 0).unwrap();
+
+            let expected: usize = text.lines().filter(|l| l.contains(&find)).count();
+            prop_assert_eq!(result.changes.len(), expected);
+        }
+
+        /// **Adversarial**: Text with no trailing newline must remain without
+        /// a trailing newline after any Replace operation, even if the
+        /// final line is modified. Regression guard for file-end handling.
+        #[test]
+        fn prop_no_trailing_newline_preserved(
+            find in "[a-zA-Z]{1,6}",
+            replace in "[a-zA-Z]{1,6}",
+        ) {
+            // Build text WITHOUT a trailing newline, with the pattern on the
+            // last line so replacement happens there.
+            let text = format!("first line\nlast line with {find}");
+            prop_assume!(!text.ends_with('\n'));
+
+            let op = Op::Replace {
+                find,
+                replace,
+                regex: false,
+                case_insensitive: false,
+            };
+            let matcher = Matcher::new(&op).unwrap();
+            let result = apply(&text, &op, &matcher, None, 0).unwrap();
+            if let Some(ref output) = result.text {
+                prop_assert!(
+                    !output.ends_with('\n'),
+                    "Spurious trailing newline added to {output:?} (input had none)"
                 );
             }
         }

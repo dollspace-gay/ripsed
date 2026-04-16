@@ -294,4 +294,162 @@ mod tests {
         // The good file should not have been written either
         assert!(!good.exists());
     }
+
+    // ---- Adversarial rollback tests ----
+    //
+    // The existing `atomic_batch_rollback` test only checks that dropping
+    // a batch without committing doesn't leave files on disk. It does NOT
+    // exercise the commit-time rollback path where some files have already
+    // been renamed into place and a later rename fails. These tests do.
+
+    /// **Adversarial**: When a commit fails partway through (rename #3 of 3
+    /// fails), the already-committed files #1 and #2 must be restored to
+    /// their original contents. This exercises the phase-3 rollback code in
+    /// `AtomicBatch::commit` that was added to ensure all-or-nothing semantics.
+    #[test]
+    fn atomic_batch_commit_mid_failure_restores_originals() {
+        let dir = tempfile::tempdir().unwrap();
+        let a = dir.path().join("a.txt");
+        let b = dir.path().join("b.txt");
+        // `c` is a *directory* where a file is expected — so `persist` will
+        // fail on it (can't replace a non-empty directory with a file).
+        let c_dir = dir.path().join("c.txt");
+        fs::create_dir(&c_dir).unwrap();
+        fs::write(c_dir.join("sentinel"), "block").unwrap();
+
+        fs::write(&a, "original_a").unwrap();
+        fs::write(&b, "original_b").unwrap();
+
+        let mut batch = AtomicBatch::new();
+        batch.stage(&a, "new_a").unwrap();
+        batch.stage(&b, "new_b").unwrap();
+        // This stage is fine; failure happens at commit time when rename
+        // onto `c_dir` fails (rename-file-onto-nonempty-dir is an error
+        // on Linux and Windows).
+        batch.stage(&c_dir, "new_c").unwrap();
+
+        let result = batch.commit();
+        assert!(
+            result.is_err(),
+            "commit should fail when target c.txt is a non-empty directory"
+        );
+
+        // Rollback invariant: a and b should be back to their originals.
+        assert_eq!(
+            fs::read_to_string(&a).unwrap(),
+            "original_a",
+            "a.txt should have been rolled back to original content"
+        );
+        assert_eq!(
+            fs::read_to_string(&b).unwrap(),
+            "original_b",
+            "b.txt should have been rolled back to original content"
+        );
+        // The directory is still there (we never got to touch it successfully).
+        assert!(c_dir.is_dir(), "c.txt directory should still exist");
+    }
+
+    /// **Adversarial**: Rollback when the file didn't exist before the commit
+    /// must remove it (not leave a stale file behind from the successful
+    /// part of the commit).
+    #[test]
+    fn atomic_batch_rollback_removes_files_that_didnt_exist_before() {
+        let dir = tempfile::tempdir().unwrap();
+        let a = dir.path().join("new_file.txt"); // doesn't exist yet
+        let c_dir = dir.path().join("c.txt");
+        fs::create_dir(&c_dir).unwrap();
+        fs::write(c_dir.join("block"), "x").unwrap();
+
+        assert!(!a.exists());
+
+        let mut batch = AtomicBatch::new();
+        batch.stage(&a, "created_by_batch").unwrap();
+        batch.stage(&c_dir, "will_fail").unwrap();
+
+        let result = batch.commit();
+        assert!(result.is_err());
+
+        // `a` should have been removed as part of rollback because it didn't
+        // exist pre-commit.
+        assert!(
+            !a.exists(),
+            "Files that didn't exist before commit should be removed on rollback"
+        );
+    }
+
+    // ---- Permission preservation ----
+
+    /// **Adversarial**: `write_atomic` preserves the source file's permissions.
+    /// Without this, a file written with restrictive 0o600 mode could silently
+    /// become world-readable after a ripsed edit.
+    #[cfg(unix)]
+    #[test]
+    fn write_atomic_preserves_unix_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("secret.txt");
+        fs::write(&path, "sensitive\n").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+
+        write_atomic(&path, "modified\n").unwrap();
+
+        let after = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(
+            after, 0o600,
+            "write_atomic must preserve restrictive permissions on the target"
+        );
+    }
+
+    /// **Adversarial**: A write to a non-writable directory fails cleanly and
+    /// leaves no temp-file droppings behind from the atomic-write helper.
+    #[cfg(unix)]
+    #[test]
+    fn write_atomic_failure_leaves_no_temp_file() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let ro_dir = dir.path().join("readonly");
+        fs::create_dir(&ro_dir).unwrap();
+        let path = ro_dir.join("target.txt");
+        // Pre-create the file so persist() is what fails, not the initial open.
+        fs::write(&path, "original").unwrap();
+        // Make the directory read-only so tempfile creation fails.
+        fs::set_permissions(&ro_dir, fs::Permissions::from_mode(0o500)).unwrap();
+
+        let result = write_atomic(&path, "new content");
+        assert!(
+            result.is_err(),
+            "write_atomic must fail when tempfile creation is blocked"
+        );
+
+        // Restore dir perms so the tempdir can be dropped.
+        fs::set_permissions(&ro_dir, fs::Permissions::from_mode(0o700)).unwrap();
+
+        // Only the original file should remain — no .tmp droppings.
+        let entries: Vec<_> = fs::read_dir(&ro_dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name())
+            .collect();
+        assert_eq!(
+            entries.len(),
+            1,
+            "only the original file should remain, got {entries:?}"
+        );
+    }
+
+    /// **Adversarial**: write_atomic on content containing an embedded NUL is
+    /// preserved byte-for-byte. NULs can upset naive string pipelines; lock
+    /// in the behavior we want.
+    #[test]
+    fn write_atomic_preserves_embedded_nul_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("with_nul.bin");
+
+        let content = "before\x00after\n";
+        write_atomic(&path, content).unwrap();
+        let back = fs::read(&path).unwrap();
+        assert_eq!(back.as_slice(), content.as_bytes());
+    }
 }

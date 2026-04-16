@@ -372,4 +372,207 @@ mod tests {
         let m = Matcher::new(&op).unwrap();
         assert!(m.replace("nothing here", "abc").is_none());
     }
+
+    // ---------------------------------------------------------------
+    // Pathological / adversarial pattern tests
+    //
+    // These lock in behavior for patterns that look like they ought to
+    // break something: regex metacharacters misused in literal mode,
+    // empty inputs, patterns with backreference-like replacement strings,
+    // and regex that would blow up a backtracking engine.
+    // ---------------------------------------------------------------
+
+    /// A literal pattern of `$1` (which would be a capture backreference in
+    /// a regex replacement context) must match the literal two-character
+    /// sequence in text and be replaceable without invoking capture-group
+    /// semantics. Regression guard against anyone accidentally swapping
+    /// `str::replace` for `Regex::replace_all` in the literal path.
+    #[test]
+    fn test_literal_dollar_one_pattern() {
+        let op = Op::Replace {
+            find: "$1".to_string(),
+            replace: "REPLACED".to_string(),
+            regex: false,
+            case_insensitive: false,
+        };
+        let m = Matcher::new(&op).unwrap();
+        assert!(m.is_match("value is $1 here"));
+        let result = m.replace("value is $1 here", "REPLACED");
+        assert_eq!(result, Some("value is REPLACED here".to_string()));
+    }
+
+    /// A regex pattern whose replacement string contains `$0`, `$1`, etc.
+    /// should be interpreted as a capture-backreference in regex mode.
+    /// This is intended behavior; locking it in so nobody accidentally
+    /// escapes it.
+    #[test]
+    fn test_regex_backreferences_work_in_replace() {
+        let op = Op::Replace {
+            find: r"hello (\w+)".to_string(),
+            replace: "greetings, $1!".to_string(),
+            regex: true,
+            case_insensitive: false,
+        };
+        let m = Matcher::new(&op).unwrap();
+        let result = m.replace("hello world", "greetings, $1!");
+        assert_eq!(result, Some("greetings, world!".to_string()));
+    }
+
+    /// **Adversarial**: the classic "catastrophic backtracking" pattern
+    /// `(a+)+$` on a long non-matching input is O(2^n) in a naive NFA.
+    /// The `regex` crate uses a DFA/bounded-time engine so this should
+    /// complete effectively instantly. Lock in that we've picked a safe
+    /// engine — switching to a backtracking regex crate would hang here.
+    #[test]
+    fn test_regex_no_catastrophic_backtracking() {
+        let op = Op::Replace {
+            find: r"(a+)+$".to_string(),
+            replace: "X".to_string(),
+            regex: true,
+            case_insensitive: false,
+        };
+        let m = Matcher::new(&op).unwrap();
+        // 30 'a's followed by 'b' — classic ReDoS trigger for backtracking engines.
+        let mut input = "a".repeat(30);
+        input.push('b');
+        let start = std::time::Instant::now();
+        let result = m.is_match(&input);
+        let elapsed = start.elapsed();
+        assert!(!result, "pattern should not match 'aaaa...b'");
+        // Generous bound — should actually complete in microseconds.
+        assert!(
+            elapsed < std::time::Duration::from_millis(500),
+            "regex took too long ({elapsed:?}) — possible ReDoS"
+        );
+    }
+
+    /// **Adversarial**: the replacement string is NUL-separated or contains
+    /// control characters. Must pass through unchanged (no shell-like
+    /// interpretation).
+    #[test]
+    fn test_replacement_with_control_chars() {
+        let op = Op::Replace {
+            find: "placeholder".to_string(),
+            replace: "\x07bell\x1bescape\x00nul".to_string(),
+            regex: false,
+            case_insensitive: false,
+        };
+        let m = Matcher::new(&op).unwrap();
+        let result = m.replace("use placeholder here", "\x07bell\x1bescape\x00nul");
+        assert_eq!(
+            result,
+            Some("use \x07bell\x1bescape\x00nul here".to_string())
+        );
+    }
+
+    /// **Adversarial**: a regex that is a valid-but-empty-matching pattern
+    /// (like `(?:)`) produces an empty match at every position. This is a
+    /// weird edge case that can blow up naive replace loops. Lock in that
+    /// we produce *some* deterministic output without panicking.
+    #[test]
+    fn test_empty_regex_match_does_not_panic() {
+        let op = Op::Replace {
+            find: r"(?:)".to_string(),
+            replace: "X".to_string(),
+            regex: true,
+            case_insensitive: false,
+        };
+        let m = Matcher::new(&op).unwrap();
+        // Must not panic — actual content of the result is implementation-defined.
+        let _ = m.replace("abc", "X");
+    }
+}
+
+// ---------------------------------------------------------------
+// Property-based tests (proptest)
+// ---------------------------------------------------------------
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        /// Invariant: in literal mode, `Matcher::is_match(text)` ⟺
+        /// `text.contains(pattern)`. This guards against a future optimization
+        /// accidentally changing the semantics of literal matching.
+        #[test]
+        fn prop_literal_matches_iff_contains(
+            pattern in "[a-zA-Z0-9 ]{1,10}",
+            text in "[a-zA-Z0-9 ]{0,60}",
+        ) {
+            let op = Op::Replace {
+                find: pattern.clone(),
+                replace: "".into(),
+                regex: false,
+                case_insensitive: false,
+            };
+            let m = Matcher::new(&op).unwrap();
+            prop_assert_eq!(m.is_match(&text), text.contains(&pattern));
+        }
+
+        /// Invariant: `replace(text, pat)` returns `None` iff `is_match(text)`
+        /// is `false`. A mismatch here means we'd record a spurious "change"
+        /// with no actual edit.
+        #[test]
+        fn prop_replace_none_iff_not_match(
+            pattern in "[a-zA-Z0-9]{1,6}",
+            text in "[a-zA-Z0-9]{0,40}",
+            replacement in "[a-zA-Z0-9]{0,6}",
+        ) {
+            let op = Op::Replace {
+                find: pattern.clone(),
+                replace: replacement.clone(),
+                regex: false,
+                case_insensitive: false,
+            };
+            let m = Matcher::new(&op).unwrap();
+            let is_match = m.is_match(&text);
+            let replaced = m.replace(&text, &replacement);
+            prop_assert_eq!(replaced.is_some(), is_match);
+        }
+
+        /// Invariant: replacing pattern with itself is a no-op on content
+        /// (the returned String equals the input). This is a fixed-point
+        /// test that catches mis-implementations of the literal replace path.
+        #[test]
+        fn prop_replace_with_self_is_identity(
+            pattern in "[a-zA-Z0-9]{1,6}",
+            text in "[a-zA-Z0-9 ]{0,50}",
+        ) {
+            let op = Op::Replace {
+                find: pattern.clone(),
+                replace: pattern.clone(),
+                regex: false,
+                case_insensitive: false,
+            };
+            let m = Matcher::new(&op).unwrap();
+            if let Some(replaced) = m.replace(&text, &pattern) {
+                prop_assert_eq!(replaced, text);
+            }
+        }
+
+        /// Invariant: case-insensitive literal matching is symmetric —
+        /// `Matcher(p, ci=true).is_match(t)` equals
+        /// `Matcher(t.to_lowercase(), ci=false).is_match(p.to_lowercase())`
+        /// for ASCII patterns. (Restricts to ASCII because Unicode case folding
+        /// is famously asymmetric; our ASCII invariant is what callers rely on.)
+        #[test]
+        fn prop_case_insensitive_ascii_symmetric(
+            pattern in "[a-zA-Z]{1,6}",
+            text in "[a-zA-Z]{0,30}",
+        ) {
+            let op = Op::Replace {
+                find: pattern.clone(),
+                replace: String::new(),
+                regex: false,
+                case_insensitive: true,
+            };
+            let m = Matcher::new(&op).unwrap();
+            let matches = m.is_match(&text);
+            prop_assert_eq!(
+                matches,
+                text.to_ascii_lowercase().contains(&pattern.to_ascii_lowercase())
+            );
+        }
+    }
 }

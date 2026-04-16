@@ -251,8 +251,13 @@ mod tests {
 
     // ── Op serde roundtrip ──
 
+    /// Locks in the protocol wire-format: the `op` tag MUST serialize as
+    /// `"replace"` (snake_case), not `"Replace"`. Agents that depend on
+    /// this wire format would silently break if the tag rename were
+    /// removed. Only one such test per variant class — the rest are
+    /// pure serde-framework roundtrips with no added value.
     #[test]
-    fn replace_serializes_with_op_tag() {
+    fn replace_op_tag_wire_format() {
         let op = Op::Replace {
             find: "foo".into(),
             replace: "bar".into(),
@@ -263,57 +268,6 @@ mod tests {
         assert_eq!(json["op"], "replace");
         assert_eq!(json["find"], "foo");
         assert_eq!(json["replace"], "bar");
-    }
-
-    #[test]
-    fn delete_roundtrips_through_json() {
-        let op = Op::Delete {
-            find: "TODO".into(),
-            regex: true,
-            case_insensitive: false,
-        };
-        let json = serde_json::to_string(&op).unwrap();
-        let deserialized: Op = serde_json::from_str(&json).unwrap();
-        assert_eq!(op, deserialized);
-    }
-
-    #[test]
-    fn insert_after_roundtrips_through_json() {
-        let op = Op::InsertAfter {
-            find: "use serde;".into(),
-            content: "use serde_json;".into(),
-            regex: false,
-            case_insensitive: true,
-        };
-        let json = serde_json::to_string(&op).unwrap();
-        let deserialized: Op = serde_json::from_str(&json).unwrap();
-        assert_eq!(op, deserialized);
-    }
-
-    #[test]
-    fn insert_before_roundtrips_through_json() {
-        let op = Op::InsertBefore {
-            find: "fn main".into(),
-            content: "// entry".into(),
-            regex: false,
-            case_insensitive: false,
-        };
-        let json = serde_json::to_string(&op).unwrap();
-        let deserialized: Op = serde_json::from_str(&json).unwrap();
-        assert_eq!(op, deserialized);
-    }
-
-    #[test]
-    fn replace_line_roundtrips_through_json() {
-        let op = Op::ReplaceLine {
-            find: "old".into(),
-            content: "new".into(),
-            regex: true,
-            case_insensitive: true,
-        };
-        let json = serde_json::to_string(&op).unwrap();
-        let deserialized: Op = serde_json::from_str(&json).unwrap();
-        assert_eq!(op, deserialized);
     }
 
     #[test]
@@ -329,68 +283,6 @@ mod tests {
         let json = r#"{"op": "transform", "find": "a"}"#;
         let result = serde_json::from_str::<Op>(json);
         assert!(result.is_err());
-    }
-
-    // ── Accessor methods ──
-
-    #[test]
-    fn find_pattern_returns_find_for_all_variants() {
-        let ops = [
-            Op::Replace {
-                find: "a".into(),
-                replace: "b".into(),
-                regex: false,
-                case_insensitive: false,
-            },
-            Op::Delete {
-                find: "c".into(),
-                regex: false,
-                case_insensitive: false,
-            },
-            Op::InsertAfter {
-                find: "d".into(),
-                content: "e".into(),
-                regex: false,
-                case_insensitive: false,
-            },
-            Op::InsertBefore {
-                find: "f".into(),
-                content: "g".into(),
-                regex: false,
-                case_insensitive: false,
-            },
-            Op::ReplaceLine {
-                find: "h".into(),
-                content: "i".into(),
-                regex: false,
-                case_insensitive: false,
-            },
-        ];
-        let expected = ["a", "c", "d", "f", "h"];
-        for (op, exp) in ops.iter().zip(expected.iter()) {
-            assert_eq!(op.find_pattern(), *exp);
-        }
-    }
-
-    #[test]
-    fn is_regex_reflects_field() {
-        let op = Op::Delete {
-            find: "x".into(),
-            regex: true,
-            case_insensitive: false,
-        };
-        assert!(op.is_regex());
-    }
-
-    #[test]
-    fn is_case_insensitive_reflects_field() {
-        let op = Op::Replace {
-            find: "x".into(),
-            replace: "y".into(),
-            regex: false,
-            case_insensitive: true,
-        };
-        assert!(op.is_case_insensitive());
     }
 
     // ── LineRange ──
@@ -430,17 +322,6 @@ mod tests {
         assert!(!range.contains(8));
     }
 
-    #[test]
-    fn line_range_roundtrips_through_json() {
-        let range = LineRange {
-            start: 1,
-            end: Some(50),
-        };
-        let json = serde_json::to_string(&range).unwrap();
-        let deserialized: LineRange = serde_json::from_str(&json).unwrap();
-        assert_eq!(range, deserialized);
-    }
-
     // ── OpOptions ──
 
     #[test]
@@ -475,66 +356,9 @@ mod tests {
         assert!(opts.backup);
     }
 
-    // ── New Op serde roundtrip tests ──
+    // ── Serde defaults and unknown-variant behavior ──
 
-    #[test]
-    fn transform_roundtrips_through_json() {
-        let op = Op::Transform {
-            find: "myVar".into(),
-            mode: TransformMode::SnakeCase,
-            regex: false,
-            case_insensitive: true,
-        };
-        let json = serde_json::to_string(&op).unwrap();
-        let deserialized: Op = serde_json::from_str(&json).unwrap();
-        assert_eq!(op, deserialized);
-    }
-
-    #[test]
-    fn transform_serializes_with_op_tag() {
-        let op = Op::Transform {
-            find: "hello".into(),
-            mode: TransformMode::Upper,
-            regex: true,
-            case_insensitive: false,
-        };
-        let json = serde_json::to_value(&op).unwrap();
-        assert_eq!(json["op"], "transform");
-        assert_eq!(json["find"], "hello");
-        assert_eq!(json["mode"], "upper");
-        assert_eq!(json["regex"], true);
-    }
-
-    #[test]
-    fn transform_all_modes_roundtrip() {
-        let modes = [
-            TransformMode::Upper,
-            TransformMode::Lower,
-            TransformMode::Title,
-            TransformMode::SnakeCase,
-            TransformMode::CamelCase,
-        ];
-        for mode in modes {
-            let op = Op::Transform {
-                find: "test".into(),
-                mode,
-                regex: false,
-                case_insensitive: false,
-            };
-            let json = serde_json::to_string(&op).unwrap();
-            let deserialized: Op = serde_json::from_str(&json).unwrap();
-            assert_eq!(op, deserialized, "Failed roundtrip for mode {:?}", mode);
-        }
-    }
-
-    #[test]
-    fn transform_deserialize_with_defaults() {
-        let json = r#"{"op": "transform", "find": "x", "mode": "upper"}"#;
-        let op: Op = serde_json::from_str(json).unwrap();
-        assert!(!op.is_regex());
-        assert!(!op.is_case_insensitive());
-    }
-
+    /// Protocol: `transform` with no `mode` must be rejected, not defaulted.
     #[test]
     fn transform_missing_mode_fails() {
         let json = r#"{"op": "transform", "find": "a"}"#;
@@ -542,80 +366,11 @@ mod tests {
         assert!(result.is_err());
     }
 
+    /// Protocol: `indent` amount defaults to 4 when omitted.
     #[test]
-    fn surround_roundtrips_through_json() {
-        let op = Op::Surround {
-            find: "TODO".into(),
-            prefix: "<<".into(),
-            suffix: ">>".into(),
-            regex: true,
-            case_insensitive: false,
-        };
-        let json = serde_json::to_string(&op).unwrap();
-        let deserialized: Op = serde_json::from_str(&json).unwrap();
-        assert_eq!(op, deserialized);
-    }
-
-    #[test]
-    fn surround_serializes_with_op_tag() {
-        let op = Op::Surround {
-            find: "word".into(),
-            prefix: "[".into(),
-            suffix: "]".into(),
-            regex: false,
-            case_insensitive: false,
-        };
-        let json = serde_json::to_value(&op).unwrap();
-        assert_eq!(json["op"], "surround");
-        assert_eq!(json["find"], "word");
-        assert_eq!(json["prefix"], "[");
-        assert_eq!(json["suffix"], "]");
-    }
-
-    #[test]
-    fn surround_deserialize_with_defaults() {
-        let json = r#"{"op": "surround", "find": "x", "prefix": "<", "suffix": ">"}"#;
-        let op: Op = serde_json::from_str(json).unwrap();
-        assert!(!op.is_regex());
-        assert!(!op.is_case_insensitive());
-    }
-
-    #[test]
-    fn indent_roundtrips_through_json() {
-        let op = Op::Indent {
-            find: "fn ".into(),
-            amount: 8,
-            use_tabs: true,
-            regex: false,
-            case_insensitive: false,
-        };
-        let json = serde_json::to_string(&op).unwrap();
-        let deserialized: Op = serde_json::from_str(&json).unwrap();
-        assert_eq!(op, deserialized);
-    }
-
-    #[test]
-    fn indent_serializes_with_op_tag() {
-        let op = Op::Indent {
-            find: "line".into(),
-            amount: 4,
-            use_tabs: false,
-            regex: false,
-            case_insensitive: false,
-        };
-        let json = serde_json::to_value(&op).unwrap();
-        assert_eq!(json["op"], "indent");
-        assert_eq!(json["find"], "line");
-        assert_eq!(json["amount"], 4);
-    }
-
-    #[test]
-    fn indent_deserialize_with_defaults() {
+    fn indent_amount_defaults_to_four() {
         let json = r#"{"op": "indent", "find": "x"}"#;
         let op: Op = serde_json::from_str(json).unwrap();
-        assert!(!op.is_regex());
-        assert!(!op.is_case_insensitive());
-        // amount should default to 4
         match op {
             Op::Indent {
                 amount, use_tabs, ..
@@ -627,42 +382,11 @@ mod tests {
         }
     }
 
+    /// Protocol: `dedent` amount defaults to 4 when omitted.
     #[test]
-    fn dedent_roundtrips_through_json() {
-        let op = Op::Dedent {
-            find: "code".into(),
-            amount: 2,
-            use_tabs: false,
-            regex: true,
-            case_insensitive: true,
-        };
-        let json = serde_json::to_string(&op).unwrap();
-        let deserialized: Op = serde_json::from_str(&json).unwrap();
-        assert_eq!(op, deserialized);
-    }
-
-    #[test]
-    fn dedent_serializes_with_op_tag() {
-        let op = Op::Dedent {
-            find: "line".into(),
-            amount: 4,
-            use_tabs: false,
-            regex: false,
-            case_insensitive: false,
-        };
-        let json = serde_json::to_value(&op).unwrap();
-        assert_eq!(json["op"], "dedent");
-        assert_eq!(json["find"], "line");
-        assert_eq!(json["amount"], 4);
-    }
-
-    #[test]
-    fn dedent_deserialize_with_defaults() {
+    fn dedent_amount_defaults_to_four() {
         let json = r#"{"op": "dedent", "find": "x"}"#;
         let op: Op = serde_json::from_str(json).unwrap();
-        assert!(!op.is_regex());
-        assert!(!op.is_case_insensitive());
-        // amount should default to 4
         match op {
             Op::Dedent { amount, .. } => {
                 assert_eq!(amount, 4);
@@ -671,115 +395,19 @@ mod tests {
         }
     }
 
-    // ── Accessor methods for new variants ──
-
+    /// Protocol wire format: transform mode names serialize to the
+    /// snake_case forms agents expect. Locks in the API contract.
     #[test]
-    fn find_pattern_returns_find_for_new_variants() {
-        let ops = [
-            Op::Transform {
-                find: "t".into(),
-                mode: TransformMode::Upper,
-                regex: false,
-                case_insensitive: false,
-            },
-            Op::Surround {
-                find: "s".into(),
-                prefix: "<".into(),
-                suffix: ">".into(),
-                regex: false,
-                case_insensitive: false,
-            },
-            Op::Indent {
-                find: "i".into(),
-                amount: 4,
-                use_tabs: false,
-                regex: false,
-                case_insensitive: false,
-            },
-            Op::Dedent {
-                find: "d".into(),
-                amount: 4,
-                use_tabs: false,
-                regex: false,
-                case_insensitive: false,
-            },
-        ];
-        let expected = ["t", "s", "i", "d"];
-        for (op, exp) in ops.iter().zip(expected.iter()) {
-            assert_eq!(op.find_pattern(), *exp);
-        }
-    }
-
-    #[test]
-    fn is_regex_reflects_field_for_new_variants() {
-        let ops = [
-            Op::Transform {
-                find: "x".into(),
-                mode: TransformMode::Upper,
-                regex: true,
-                case_insensitive: false,
-            },
-            Op::Surround {
-                find: "x".into(),
-                prefix: "<".into(),
-                suffix: ">".into(),
-                regex: true,
-                case_insensitive: false,
-            },
-            Op::Indent {
-                find: "x".into(),
-                amount: 4,
-                use_tabs: false,
-                regex: true,
-                case_insensitive: false,
-            },
-            Op::Dedent {
-                find: "x".into(),
-                amount: 4,
-                use_tabs: false,
-                regex: true,
-                case_insensitive: false,
-            },
-        ];
-        for op in &ops {
-            assert!(op.is_regex());
-        }
-    }
-
-    #[test]
-    fn is_case_insensitive_reflects_field_for_new_variants() {
-        let ops = [
-            Op::Transform {
-                find: "x".into(),
-                mode: TransformMode::Upper,
-                regex: false,
-                case_insensitive: true,
-            },
-            Op::Surround {
-                find: "x".into(),
-                prefix: "<".into(),
-                suffix: ">".into(),
-                regex: false,
-                case_insensitive: true,
-            },
-            Op::Indent {
-                find: "x".into(),
-                amount: 4,
-                use_tabs: false,
-                regex: false,
-                case_insensitive: true,
-            },
-            Op::Dedent {
-                find: "x".into(),
-                amount: 4,
-                use_tabs: false,
-                regex: false,
-                case_insensitive: true,
-            },
-        ];
-        for op in &ops {
-            assert!(op.is_case_insensitive());
-        }
+    fn transform_mode_wire_names() {
+        let op = Op::Transform {
+            find: "hello".into(),
+            mode: TransformMode::SnakeCase,
+            regex: true,
+            case_insensitive: false,
+        };
+        let json = serde_json::to_value(&op).unwrap();
+        assert_eq!(json["op"], "transform");
+        assert_eq!(json["mode"], "snake_case");
     }
 
     // ── TransformMode Display and FromStr ──
