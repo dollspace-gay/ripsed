@@ -1,0 +1,10 @@
+{
+  "uuid": "37670d09-6438-4854-a5e4-8a6f7bee7d9e",
+  "issue_uuid": "3ec61aac-5042-4018-aadd-7fd7d25a03c6",
+  "author": "l6vc",
+  "content": "Fixed the remaining FileLock race with a flock(2)/LockFileEx rewrite. The O_CREAT|O_EXCL+PID-staleness sentinel approach was fundamentally racy — both the empty-file window between create_new and writeln, and the Drop-order race where removing the sentinel before closing the fd let another thread flock a different inode at the same path.\n\nThe new approach uses real OS-level file locking: flock(2) on Unix, LockFileEx on Windows. The lock file content (PID+timestamp) is purely diagnostic; mutual exclusion is enforced by the kernel against the inode. The sentinel is deliberately left on disk forever to avoid the inode-swap race.\n\nStress test: 100/100 concurrent_write_test passes. Added no_concurrent_holders_under_hammer as a direct regression guard (16 threads × 50 rounds with atomic counter).\n\nAll three bugs found by the adversarial tests are now fixed:\n1. FileLock race — flock-based rewrite.\n2. Engine trailing-newline when deleting all lines — previous session.\n3. Symlink/hard-link duplicate discovery — previous session.\n\nFinal: 542 tests passing, 0 failing, clippy clean, cargo fmt clean.",
+  "created_at": "2026-04-16T16:56:53.250024569Z",
+  "kind": "handoff",
+  "signed_by": "SHA256:owGv2pS6Mp5dzq69ND6ibtti3Rz48VKssgioZDAjaEw",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg3COauy3CBNOq40NwS6eLtby6EessoIBJCW9P6y4za+cAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAjBof9w+Hm32Y1kM9ISP2I/6vPWGjT6r6Ko71xaYdES3E4ZOKBVP4Ib4iqAmqIhczzXMsnJdKKG0Ih38kmCNVAw=="
+}
