@@ -2,11 +2,12 @@
   "uuid": "7018fedc-6518-4fa0-8a83-3edab9d2ce66",
   "display_id": 83,
   "title": "Harden test suite: remove tautological tests, add adversarial and integration tests",
-  "status": "open",
+  "status": "closed",
   "priority": "medium",
   "created_by": "anon-59ff128d",
   "created_at": "2026-04-16T15:52:31.762460280Z",
-  "updated_at": "2026-04-16T15:52:34.055559310Z",
+  "updated_at": "2026-04-17T17:04:56.638854166Z",
+  "closed_at": "2026-04-17T17:04:56.638854166Z",
   "labels": [
     "testing"
   ]
