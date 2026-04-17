@@ -1,0 +1,10 @@
+{
+  "uuid": "2b121faf-09ba-45f1-9dc5-903ba35019bc",
+  "issue_uuid": "60a29a07-b075-4007-8232-af90698d5c52",
+  "author": "l6vc",
+  "content": "Closing as duplicate of #84 (all three tickets describe the same test-audit work; created 3x due to earlier FOREIGN KEY issue).",
+  "created_at": "2026-04-17T17:04:40.368802543Z",
+  "kind": "note",
+  "signed_by": "SHA256:owGv2pS6Mp5dzq69ND6ibtti3Rz48VKssgioZDAjaEw",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg3COauy3CBNOq40NwS6eLtby6EessoIBJCW9P6y4za+cAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA3uEGAmEZRgZSLHM6210rvBz/wzouG0iVfXLL3LEF4cdKYVrMegiyTTlhHUkwuTBcm1NM/AyTVQbSoAUovTijDw=="
+}
