@@ -1,0 +1,10 @@
+{
+  "uuid": "8b964274-d9df-41e2-a82c-0bd8b84d6c33",
+  "issue_uuid": "b05e1b61-4f7e-42cf-97f2-9b0fcda24782",
+  "author": "l6vc",
+  "content": "Session auto-ended (stale after 1018 minutes). No handoff notes provided.",
+  "created_at": "2026-04-17T17:27:43.181314203Z",
+  "kind": "handoff",
+  "signed_by": "SHA256:owGv2pS6Mp5dzq69ND6ibtti3Rz48VKssgioZDAjaEw",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg3COauy3CBNOq40NwS6eLtby6EessoIBJCW9P6y4za+cAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA5f4avfU4Hv1faf7ZTZeWqkNDBYtW9++QStyG8YF3L1obphruIo8x47HF400O4V1pYU8D+khCOmShQJxEUroqDA=="
+}
