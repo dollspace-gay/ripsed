@@ -1,0 +1,10 @@
+{
+  "uuid": "16a340c3-ce5b-4ddd-bbbf-c1cf6fa3bbde",
+  "issue_uuid": "3ec61aac-5042-4018-aadd-7fd7d25a03c6",
+  "author": "l6vc",
+  "content": "Closing: work completed per result comment dated 2026-04-16 16:18 (test-audit hardening pass). Original PID/staleness scope superseded in 0.2.8 via flock(2)/LockFileEx switch.",
+  "created_at": "2026-04-17T17:04:58.865953361Z",
+  "kind": "note",
+  "signed_by": "SHA256:owGv2pS6Mp5dzq69ND6ibtti3Rz48VKssgioZDAjaEw",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg3COauy3CBNOq40NwS6eLtby6EessoIBJCW9P6y4za+cAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAuozjoPuX/xe4oScZOkuIkvdwu9EHBYwnsjp1yp/mYyHAmxmlGstLo4CWUQYKMQI4TrCLJAF6JgeBjdvT3FP0Dw=="
+}
