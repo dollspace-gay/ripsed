@@ -1,0 +1,10 @@
+{
+  "uuid": "b8aa781e-e036-4d3e-bedc-814bb0aa0b6d",
+  "issue_uuid": "b05e1b61-4f7e-42cf-97f2-9b0fcda24782",
+  "author": "l6vc",
+  "content": "Completed:\n\n**Dep bumps (major)**\n- toml 0.8 → 1 (0.8.23 → 1.1.2)\n- anstream 0.6 → 1 (0.6.21 → 1.0.0)\n- criterion 0.5 → 0.8 (0.5.1 → 0.8.2)\n- windows-sys 0.59 → 0.61\n- rand patch 0.9.2 → 0.9.4 (fixes RUSTSEC-2026-0097)\n\n**Semver-compatible bumps** (via cargo update): clap, proptest, rayon, tempfile, libc, indexmap, hashbrown, zerocopy, wasm-bindgen, itertools (0.10→0.13), winnow (0.7→1.0 via toml), and ~15 others.\n\n**MSRV bumped**: 1.85 → 1.93\n\n**Code fixes from toolchain/dep updates**:\n- Collapsed 8 nested `if let ... { if ... }` sites flagged by clippy 1.93 `collapsible_if` lint (let-chain feature is stable in 1.93): engine.rs, detect.rs, request.rs, file_mode.rs, json_mode.rs (×3), script_mode.rs.\n- Switched `criterion::black_box` → `std::hint::black_box` in engine_bench.rs (criterion 0.8 deprecated its re-export).\n\n**Issue hygiene**:\n- Closed #82, #83 as duplicates of #84.\n- Closed #19 (test-audit scope complete, original PID/staleness superseded in 0.2.8).\n\n**Worktree cleanup**: removed 15 orphan `agent-*` worktrees + branches from .claude/worktrees/.\n\n**Verification**:\n- cargo test --workspace: 542 passed, 0 failed\n- cargo clippy --all-targets -- -D warnings: clean\n- cargo fmt --check: clean\n- cargo bench --no-run: builds\n- cargo audit: no advisories",
+  "created_at": "2026-04-17T17:09:26.910188124Z",
+  "kind": "note",
+  "signed_by": "SHA256:owGv2pS6Mp5dzq69ND6ibtti3Rz48VKssgioZDAjaEw",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg3COauy3CBNOq40NwS6eLtby6EessoIBJCW9P6y4za+cAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABAOpVW33WQvUSdi10TvEnnVIEYgry40C33zJnEAlgjNJw/O1hae7vxcFXBurmJlJCc5NNN0+30DVNp+FFwKeR5Cg=="
+}
