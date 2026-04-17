@@ -1,7 +1,8 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use ripsed_core::engine::apply;
 use ripsed_core::matcher::Matcher;
 use ripsed_core::operation::{Op, TransformMode};
+use std::hint::black_box;
 
 /// Generate a text buffer with `n` lines, each line being "line NNN: the quick brown fox
 /// jumps over the lazy dog".

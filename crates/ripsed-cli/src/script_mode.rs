@@ -123,18 +123,19 @@ pub fn run_script_mode(script_path: &str, cli: &Cli, config: &Config) -> Result<
             }
 
             if !cli.dry_run {
-                if options.backup && !files_modified_set.contains(file_path) {
-                    if let Err(e) = writer::create_backup(file_path) {
-                        eprintln!("ripsed: backup failed for {}: {e}", file_path.display());
-                        continue;
-                    }
+                if options.backup
+                    && !files_modified_set.contains(file_path)
+                    && let Err(e) = writer::create_backup(file_path)
+                {
+                    eprintln!("ripsed: backup failed for {}: {e}", file_path.display());
+                    continue;
                 }
                 if let Some(ref text) = output.text {
                     // Record undo entry before writing
-                    if let Some(ref mut log) = undo_log {
-                        if let Some(ref undo_entry) = output.undo {
-                            record_undo(log, file_path, undo_entry);
-                        }
+                    if let Some(ref mut log) = undo_log
+                        && let Some(ref undo_entry) = output.undo
+                    {
+                        record_undo(log, file_path, undo_entry);
                     }
 
                     match writer::write_atomic(file_path, text) {

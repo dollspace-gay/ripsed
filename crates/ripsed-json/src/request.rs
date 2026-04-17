@@ -83,13 +83,13 @@ impl JsonRequest {
         }
 
         // Validate undo request
-        if let Some(undo) = &self.undo {
-            if undo.last == 0 {
-                return Err(RipsedError::invalid_request(
-                    "Undo 'last' must be at least 1.",
-                    "Set \"last\" to the number of operations to undo (minimum 1).",
-                ));
-            }
+        if let Some(undo) = &self.undo
+            && undo.last == 0
+        {
+            return Err(RipsedError::invalid_request(
+                "Undo 'last' must be at least 1.",
+                "Set \"last\" to the number of operations to undo (minimum 1).",
+            ));
         }
 
         // Validate each operation

@@ -27,10 +27,10 @@ pub fn detect_stdin(stdin: &mut impl Read) -> io::Result<InputMode> {
     match first_nonws {
         Some(pos) if buffer[pos] == b'{' => {
             // Try to parse as JSON
-            if let Ok(text) = std::str::from_utf8(&buffer) {
-                if is_ripsed_json(text) {
-                    return Ok(InputMode::Json(text.to_string()));
-                }
+            if let Ok(text) = std::str::from_utf8(&buffer)
+                && is_ripsed_json(text)
+            {
+                return Ok(InputMode::Json(text.to_string()));
             }
             Ok(InputMode::Pipe(buffer))
         }
@@ -63,10 +63,10 @@ pub fn detect_buffered(reader: &mut impl BufRead) -> io::Result<InputMode> {
         // Read everything and try to parse
         let mut full = Vec::new();
         reader.read_to_end(&mut full)?;
-        if let Ok(text) = std::str::from_utf8(&full) {
-            if is_ripsed_json(text) {
-                return Ok(InputMode::Json(text.to_string()));
-            }
+        if let Ok(text) = std::str::from_utf8(&full)
+            && is_ripsed_json(text)
+        {
+            return Ok(InputMode::Json(text.to_string()));
         }
         Ok(InputMode::Pipe(full))
     } else {

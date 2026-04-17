@@ -167,18 +167,18 @@ pub fn run_file_mode(cli: &Cli, config: &Config) -> Result<(), i32> {
         }
 
         if !cli.dry_run {
-            if options.backup {
-                if let Err(e) = writer::create_backup(file_path) {
-                    eprintln!("ripsed: backup failed for {}: {e}", file_path.display());
-                    continue;
-                }
+            if options.backup
+                && let Err(e) = writer::create_backup(file_path)
+            {
+                eprintln!("ripsed: backup failed for {}: {e}", file_path.display());
+                continue;
             }
             if let Some(ref text) = output.text {
                 // Record undo entry before writing
-                if let Some(ref mut log) = undo_log {
-                    if let Some(ref undo_entry) = output.undo {
-                        record_undo(log, file_path, undo_entry);
-                    }
+                if let Some(ref mut log) = undo_log
+                    && let Some(ref undo_entry) = output.undo
+                {
+                    record_undo(log, file_path, undo_entry);
                 }
 
                 match writer::write_atomic(file_path, text) {

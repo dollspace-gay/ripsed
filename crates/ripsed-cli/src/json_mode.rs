@@ -90,16 +90,16 @@ pub fn run_json_mode(input: &str, config: &Config, jsonl: bool) -> Result<(), i3
 
         for file_path in &files {
             // Skip files that don't match the per-operation glob
-            if let Some(ref gm) = glob_matcher {
-                if !gm.is_match(file_path) {
-                    // Also try matching just the file name
-                    let matches_name = file_path
-                        .file_name()
-                        .map(|n| gm.is_match(n))
-                        .unwrap_or(false);
-                    if !matches_name {
-                        continue;
-                    }
+            if let Some(ref gm) = glob_matcher
+                && !gm.is_match(file_path)
+            {
+                // Also try matching just the file name
+                let matches_name = file_path
+                    .file_name()
+                    .map(|n| gm.is_match(n))
+                    .unwrap_or(false);
+                if !matches_name {
+                    continue;
                 }
             }
             // Acquire advisory lock on first access to this file.
@@ -168,31 +168,27 @@ pub fn run_json_mode(input: &str, config: &Config, jsonl: bool) -> Result<(), i3
 
                 results.push(result);
 
-                if !dry_run {
-                    if let Some(ref text) = output.text {
-                        // Record undo entry before writing
-                        if let Some(ref mut log) = undo_log {
-                            if let Some(ref undo_entry) = output.undo {
-                                record_undo(log, file_path, undo_entry);
-                            }
-                        }
+                if !dry_run && let Some(ref text) = output.text {
+                    // Record undo entry before writing
+                    if let Some(ref mut log) = undo_log
+                        && let Some(ref undo_entry) = output.undo
+                    {
+                        record_undo(log, file_path, undo_entry);
+                    }
 
-                        if backup {
-                            if let Err(e) = writer::create_backup(file_path) {
-                                errors.push(RipsedError::write_failed(
-                                    &file_path.to_string_lossy(),
-                                    &format!("backup failed: {e}"),
-                                ));
-                                continue;
-                            }
-                        }
+                    if backup && let Err(e) = writer::create_backup(file_path) {
+                        errors.push(RipsedError::write_failed(
+                            &file_path.to_string_lossy(),
+                            &format!("backup failed: {e}"),
+                        ));
+                        continue;
+                    }
 
-                        if atomic {
-                            // Collect for batch write
-                            pending_writes.push((file_path.clone(), text.clone()));
-                        } else if writer::write_atomic(file_path, text).is_ok() {
-                            summary.files_modified += 1;
-                        }
+                    if atomic {
+                        // Collect for batch write
+                        pending_writes.push((file_path.clone(), text.clone()));
+                    } else if writer::write_atomic(file_path, text).is_ok() {
+                        summary.files_modified += 1;
                     }
                 }
             }

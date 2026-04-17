@@ -266,11 +266,11 @@ pub fn apply(
         let line_num = idx + 1; // 1-indexed
 
         // Skip lines outside the line range
-        if let Some(range) = line_range {
-            if !range.contains(line_num) {
-                result_lines.push(line.to_string());
-                continue;
-            }
+        if let Some(range) = line_range
+            && !range.contains(line_num)
+        {
+            result_lines.push(line.to_string());
+            continue;
         }
 
         let cx = LineCtx {
