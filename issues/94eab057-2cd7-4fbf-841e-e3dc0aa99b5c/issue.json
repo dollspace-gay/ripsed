@@ -6,5 +6,8 @@
   "priority": "high",
   "created_by": "l6vc",
   "created_at": "2026-04-17T00:28:45.151936444Z",
-  "updated_at": "2026-04-17T00:28:45.151936444Z"
+  "updated_at": "2026-04-17T00:28:49.268234307Z",
+  "labels": [
+    "bug"
+  ]
 }
