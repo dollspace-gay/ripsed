@@ -2,11 +2,12 @@
   "uuid": "3ec61aac-5042-4018-aadd-7fd7d25a03c6",
   "display_id": 19,
   "title": "Add PID and staleness detection to file lock mechanism",
-  "status": "open",
+  "status": "closed",
   "priority": "high",
   "created_by": "anon-59ff128d",
   "created_at": "2026-03-27T13:15:54.393871641Z",
-  "updated_at": "2026-04-16T17:03:58.097024267Z",
+  "updated_at": "2026-04-17T17:05:00.944690751Z",
+  "closed_at": "2026-04-17T17:05:00.944690751Z",
   "labels": [
     "enhancement"
   ]
