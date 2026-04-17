@@ -6,6 +6,10 @@
     "85": {
       "agent_id": "l6vc",
       "claimed_at": "2026-04-17T00:28:53.891299903Z"
+    },
+    "86": {
+      "agent_id": "l6vc",
+      "claimed_at": "2026-04-17T17:04:16.029977212Z"
     }
   },
   "issues": {},
@@ -34,11 +38,16 @@
       "agent_id": "l6vc",
       "agent_seq": 5,
       "timestamp": "2026-04-17T00:28:53.891299903Z"
+    },
+    {
+      "agent_id": "l6vc",
+      "agent_seq": 6,
+      "timestamp": "2026-04-17T17:04:16.029977212Z"
     }
   ],
   "watermark": {
-    "timestamp": "2026-04-17T00:28:53.891299903Z",
+    "timestamp": "2026-04-17T17:04:16.029977212Z",
     "agent_id": "l6vc",
-    "agent_seq": 5
+    "agent_seq": 6
   }
 }
