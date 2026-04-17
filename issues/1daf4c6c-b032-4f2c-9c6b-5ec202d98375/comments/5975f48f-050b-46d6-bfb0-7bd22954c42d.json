@@ -1,0 +1,10 @@
+{
+  "uuid": "5975f48f-050b-46d6-bfb0-7bd22954c42d",
+  "issue_uuid": "1daf4c6c-b032-4f2c-9c6b-5ec202d98375",
+  "author": "l6vc",
+  "content": "Fixed in 8f2fe49. Root cause: LockFileEx on Windows locks byte ranges and blocks concurrent opens-for-read of the locked region (unlike flock on Unix which is advisory and read-transparent). The test opened a second handle via fs::read_to_string while the first handle still held the exclusive byte-range lock.\n\nFix: release the lock before reading the sentinel content. The PID/timestamp written during acquire() persists on disk after drop, so the read-back still validates that acquire populates the diagnostic content — just portably across both locking semantics.",
+  "created_at": "2026-04-17T17:36:01.829860055Z",
+  "kind": "note",
+  "signed_by": "SHA256:owGv2pS6Mp5dzq69ND6ibtti3Rz48VKssgioZDAjaEw",
+  "signature": "U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAg3COauy3CBNOq40NwS6eLtby6EessoIBJCW9P6y4za+cAAAARY3Jvc3NsaW5rLWNvbW1lbnQAAAAAAAAABnNoYTUxMgAAAFMAAAALc3NoLWVkMjU1MTkAAABA0yOYAXeX/DD1UN39QBUmFTiDu3FAiZxsV2RJMjtyU3cIA2h7X7M03Tahn8d8k/OM8S9SX4BnVkPDS085BT/ZAg=="
+}
