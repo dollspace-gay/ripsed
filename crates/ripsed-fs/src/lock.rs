@@ -315,7 +315,12 @@ mod tests {
         let path = dir.path().join("target.txt");
         fs::write(&path, "data").unwrap();
 
-        let _lock = FileLock::acquire(&path).unwrap();
+        let lock = FileLock::acquire(&path).unwrap();
+        // Windows LockFileEx blocks concurrent reads of the locked byte range;
+        // flock on Unix is advisory and doesn't. Release before reading so the
+        // test verifies the on-disk content portably. The PID/timestamp
+        // written in acquire() persists after drop.
+        lock.release().unwrap();
         let contents = fs::read_to_string(lock_path_for(&path)).unwrap();
         let parts: Vec<&str> = contents.split_whitespace().collect();
         assert_eq!(parts.len(), 2, "lock file should have PID and timestamp");
